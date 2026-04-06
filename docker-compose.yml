@@ -1,0 +1,73 @@
+services:
+  postgres_etheria:
+    image: postgres:16
+    container_name: postgres_etheria
+    environment:
+      POSTGRES_DB: etheria
+      POSTGRES_USER: etheria_user
+      POSTGRES_PASSWORD: etheria_pass
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_datos:/var/lib/postgresql/data
+      - ./postgresql:/docker-entrypoint-initdb.d
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U etheria_user -d etheria"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  mysql_dynamic:
+    image: mysql:8.4
+    container_name: mysql_dynamic
+    environment:
+      MYSQL_DATABASE: dynamicbrands
+      MYSQL_USER: dynamic_user
+      MYSQL_PASSWORD: dynamic_pass
+      MYSQL_ROOT_PASSWORD: rootpass
+    command: ["--default-authentication-plugin=mysql_native_password"]
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql_datos:/var/lib/mysql
+      - ./mysql:/docker-entrypoint-initdb.d
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h localhost -udynamic_user -pdynamic_pass"]
+      interval: 10s
+      timeout: 10s
+      retries: 15
+
+  etl_unificacion:
+    build:
+      context: .
+      dockerfile: docker/etl.Dockerfile
+    container_name: etl_unificacion
+    environment:
+      PG_HOST: postgres_etheria
+      PG_PORT: 5432
+      PG_DB: etheria
+      PG_USER: etheria_user
+      PG_PASSWORD: etheria_pass
+      MYSQL_HOST: mysql_dynamic
+      MYSQL_PORT: 3306
+      MYSQL_DB: dynamicbrands
+      MYSQL_USER: dynamic_user
+      MYSQL_PASSWORD: dynamic_pass
+    depends_on:
+      postgres_etheria:
+        condition: service_healthy
+      mysql_dynamic:
+        condition: service_healthy
+
+  metabase:
+    image: metabase/metabase:latest
+    container_name: metabase_dashboard
+    ports:
+      - "3000:3000"
+    depends_on:
+      postgres_etheria:
+        condition: service_healthy
+
+volumes:
+  postgres_datos:
+  mysql_datos:
