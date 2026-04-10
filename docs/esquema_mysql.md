@@ -14,62 +14,107 @@
 ## Tablas principales
 
 ### pais
-- PK: idpais
-- UK: codigopaisiso, nombrepais
-- Campos clave: codigomoneda, monedaoficial
+- idpais PK: bigint AUTO_INCREMENT
+- codigopaisiso UK: char(2) NOT NULL
+- nombrepais UK: varchar(80) NOT NULL
+- codigomoneda: char(3) NOT NULL
+- monedaoficial: varchar(50) NOT NULL
+- activo: tinyint(1) NOT NULL, DEFAULT 1
+- fechacreacion: timestamp NOT NULL, DEFAULT current_timestamp
 
 ### marcaia
-- PK: idmarcaia
-- UK: nombremarca
-- Campos clave: enfoquemarketing, estado
+- idmarcaia PK: bigint AUTO_INCREMENT
+- nombremarca UK: varchar(120) NOT NULL
+- enfoqueprincipal: varchar(120) NOT NULL
+- descripcionmarca: text
+- estado: varchar(20) NOT NULL, CHECK (estado IN ('activa', 'inactiva', 'pausada'))
+- fechacreacion: timestamp NOT NULL, DEFAULT current_timestamp
 
 ### sitioweb
-- PK: idsitioweb
-- UK: codigositio, dominioweb
-- FK: idmarcaia -> marcaia
-- FK: idpais -> pais
-- Campos clave: monedaoperacion, idioma, estado, fechainicio, fechacierre
+- idsitioweb PK: bigint AUTO_INCREMENT
+- codigositio UK: varchar(40) NOT NULL
+- idmarcaia FK(marcaia): bigint NOT NULL
+- idpais FK(pais): bigint NOT NULL
+- dominioweb UK: varchar(180) NOT NULL
+- idioma: varchar(20) NOT NULL
+- monedaoperacion: char(3) NOT NULL
+- estado: varchar(20) NOT NULL, CHECK (estado IN ('activo', 'cerrado', 'mantenimiento'))
+- fechainicio: date NOT NULL
+- fechacierre: date
 
 ### clientefinal
-- PK: idclientefinal
-- UK: correo
-- FK: idpais -> pais
+- idclientefinal PK: bigint AUTO_INCREMENT
+- nombrecompleto: varchar(120) NOT NULL
+- correo UK: varchar(150) NOT NULL
+- telefono: varchar(30)
+- direccionentrega: varchar(220) NOT NULL
+- idpais FK(pais): bigint NOT NULL
+- fecharegistro: timestamp NOT NULL, DEFAULT current_timestamp
 
 ### ordenventa
-- PK: idordenventa
-- UK: codigoordenventa
-- FK: idsitioweb -> sitioweb
-- FK: idclientefinal -> clientefinal
-- Campos clave: totalmonedalocal, totalimpuesto, costoshipping, permisosanitario
+- idordenventa PK: bigint AUTO_INCREMENT
+- codigoordenventa UK: varchar(40) NOT NULL
+- idsitioweb FK(sitioweb): bigint NOT NULL
+- idclientefinal FK(clientefinal): bigint NOT NULL
+- fechaorden: datetime NOT NULL
+- estadoorden: varchar(20) NOT NULL, CHECK (estadoorden IN ('creada', 'pagada', 'preparando', 'despachada', 'entregada', 'cancelada'))
+- totalmonedalocal: decimal(16,4) NOT NULL
+- totalimpuesto: decimal(16,4) NOT NULL
+- costoshipping: decimal(16,4) NOT NULL
+- permisosanitario: decimal(16,4) NOT NULL
+- observaciones: text
+- fechacreacion: timestamp NOT NULL, DEFAULT current_timestamp
 
 ### ordenventadetalle
-- PK: idordenventadetalle
-- UK: idordenventa + codigoproductoetheria
-- FK: idordenventa -> ordenventa
-- Integracion: codigoproductoetheria referencia logica hacia Etheria
-- Campos clave: cantidad, preciounitariolocal, subtotal
+- idordenventadetalle PK: bigint AUTO_INCREMENT
+- idordenventa UK, FK(ordenventa): bigint NOT NULL
+- codigoproductoetheria UK: varchar(20) NOT NULL
+- nombreproductomarca: varchar(180) NOT NULL
+- cantidad: decimal(14,2) NOT NULL, CHECK (cantidad > 0)
+- preciounitariolocal: decimal(16,4) NOT NULL
+- subtotal: decimal(16,4) NOT NULL
 
 ### courierexterno
-- PK: idcourierexterno
-- UK: nombrecourier + paisoperacion
+- idcourierexterno PK: bigint AUTO_INCREMENT
+- nombrecourier UK: varchar(120) NOT NULL
+- paisoperacion UK: varchar(80) NOT NULL
+- nivelservicio: varchar(40) NOT NULL
+- activo: tinyint(1) NOT NULL, DEFAULT 1
 
 ### despacho
-- PK: iddespacho
-- UK: codigoguia
-- FK: idordenventa -> ordenventa
-- FK: idcourierexterno -> courierexterno
-- Campos clave: fechas de salida/llegada/entrega, estadodespacho, costocourierlocal
+- iddespacho PK: bigint AUTO_INCREMENT
+- idordenventa FK(ordenventa): bigint NOT NULL
+- idcourierexterno FK(courierexterno): bigint NOT NULL
+- codigoguia UK: varchar(60) NOT NULL
+- fechasalida: datetime NOT NULL
+- fechallegadapais: datetime
+- fechaentrega: datetime
+- estadodespacho: varchar(20) NOT NULL, CHECK (estadodespacho IN ('saliohub', 'enaduana', 'entransito', 'entregado', 'incidencia'))
+- costocourierlocal: decimal(16,4) NOT NULL
+- observacion: text
 
 ### costositio
-- PK: idcostositio
-- UK: idsitioweb + fechaaplicacion + tipocosto
-- FK: idsitioweb -> sitioweb
+- idcostositio PK: bigint AUTO_INCREMENT
+- idsitioweb UK, FK(sitioweb): bigint NOT NULL
+- tipocosto UK: varchar(40) NOT NULL
+- montolocal: decimal(16,4) NOT NULL
+- fechaaplicacion UK: date NOT NULL
+- observacion: text
 
 ### logcargaproceso
-- PK: idlogcargaproceso
-- Campos clave: modulo, tablaobjetivo, paso, estado, filasafectadas, mensaje
+- idlogcargaproceso PK: bigint AUTO_INCREMENT
+- modulo: varchar(50) NOT NULL
+- tablaobjetivo: varchar(80) NOT NULL
+- paso: varchar(120) NOT NULL
+- estado: varchar(20) NOT NULL, CHECK (estado IN ('iniciado', 'ok', 'error'))
+- filasafectadas: int
+- mensaje: text
+- fecharegistro: timestamp NOT NULL, DEFAULT current_timestamp
 
-## Scripts relacionados
-- mysql/01_ddl_dynamic.sql
-- mysql/02_sp_dynamic.sql
-- mysql/03_seed_orquestacion_dynamic.sql
+#### Índices
+- ix_sitioweb_pais → sitioweb(idpais)
+- ix_ordenventa_fecha → ordenventa(fechaorden)
+- ix_ordenventa_estado → ordenventa(estadoorden)
+- ix_ordenventadetalle_producto → ordenventadetalle(codigoproductoetheria)
+- ix_despacho_estado → despacho(estadodespacho)
+- ix_log_fecha → logcargaproceso(fecharegistro)

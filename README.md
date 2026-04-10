@@ -1,147 +1,218 @@
-# Caso #2 - Bases de datos I
+# Etheria Global & Dynamic Brands Group
+**Caso #2 — Bases de Datos I**  
+**Profesor: Rodrigo Núñez**
 
-## Integrantes
-- Completar con nombres y usuarios GitHub de la pareja.
+---
 
-## Contexto del caso
-Este repositorio implementa una solucion integrada para:
-- Etheria Global (PostgreSQL): abastecimiento, importacion, inventario y costos en USD.
-- Dynamic Brands (MySQL): sitios dinamicos, marcas IA, ventas en moneda local y despacho.
+## Descripción del proyecto
 
-La solucion unifica ambas fuentes en un esquema gerencial en PostgreSQL para medir rentabilidad real, efectividad de marcas y margen por pais.
+Sistema integrado y contenedorizado que conecta dos empresas del mismo holding:
 
-## Principios de diseno aplicados
-- Nombres en espanol, minuscula y pegados.
-- Separacion por dominios operativos (PostgreSQL y MySQL) y capa analitica unificada.
-- Carga de datos por stored procedures transaccionales con manejo de excepciones.
-- Logging central de ejecuciones por motor con SP independiente de auditoria.
-- Estructura preparada para crecimiento futuro (mas paises, mas marcas, mas monedas).
+- **Etheria Global** — gestión de importación, inventario y costos en USD (PostgreSQL 16)
+- **Dynamic Brands** — ventas digitales con marcas blancas generadas por IA en múltiples países (MySQL 8.4)
+
+Un proceso ETL cruza ambas fuentes y consolida los datos en un esquema gerencial (`gerencial.ventaunificada`) que alimenta un dashboard de rentabilidad en Metabase.
+
+---
 
 ## Estructura del repositorio
-- `postgresql/01_ddl_etheria.sql`: DDL operativo Etheria + restricciones + indices.
-- `postgresql/02_sp_etheria.sql`: SP transaccionales de carga y logging.
-- `postgresql/03_seed_orquestacion_etheria.sql`: orquestacion de carga Etheria.
-- `postgresql/04_ddl_gerencial.sql`: tabla de hechos unificada para dashboard.
-- `postgresql/05_vistas_kpi.sql`: vistas KPI gerenciales.
-- `mysql/01_ddl_dynamic.sql`: DDL operativo Dynamic Brands.
-- `mysql/02_sp_dynamic.sql`: SP transaccionales de carga y logging.
-- `mysql/03_seed_orquestacion_dynamic.sql`: orquestacion de carga Dynamic.
-- `integracion/python/etl_unificacion.py`: ETL MySQL -> PostgreSQL (tabla gerencial).
-- `dashboard/sql/consultas_dashboard.sql`: consultas listas para dashboard.
-- `integracion/sql/consultas_unificacion_validacion.sql`: validaciones gerenciales.
-- `docs/esquema_postgresql.md`: documentacion del esquema PostgreSQL.
-- `docs/esquema_mysql.md`: documentacion del esquema MySQL.
-- `docs/diagramas/erd_postgresql.mmd`: diagrama ERD PostgreSQL (Mermaid).
-- `docs/diagramas/erd_mysql.mmd`: diagrama ERD MySQL (Mermaid).
-- `docs/diagramas/como_exportar_pdf.md`: guia para exportar ERD a PDF.
-- `docker-compose.yml`: despliegue completo con un comando.
-- `docker/etl.Dockerfile`: imagen para el proceso de ETL.
 
-## Cobertura de requerimientos del enunciado
-1. Esquemas y restricciones en Markdown:
-	- `docs/esquema_postgresql.md`
-	- `docs/esquema_mysql.md`
-2. Scripts SQL de PostgreSQL y MySQL:
-	- Carpeta `postgresql/`
-	- Carpeta `mysql/`
-3. Diagramas de ambas bases:
-	- Fuente Mermaid en `docs/diagramas/`
-	- Exportables a PDF segun `docs/diagramas/como_exportar_pdf.md`
-4. Carga de datos por SP transaccionales:
-	- PostgreSQL: `postgresql/02_sp_etheria.sql`
-	- MySQL: `mysql/02_sp_dynamic.sql`
-5. SP independiente de logging:
-	- PostgreSQL: `etheria.sp_registrarlogcarga`
-	- MySQL: `sp_registrarlogcarga`
-6. Minimos de data:
-	- 5 paises: cargados en ambos motores.
-	- 100 productos: `sp_cargarproductosbase(100)` en PostgreSQL.
-	- 9 sitios dinamicos: `sp_cargarmarcasysitios()` en MySQL.
-7. Solucion de integracion de datos:
-	- ETL Python en `integracion/python/etl_unificacion.py`
-	- Carga de tabla unificada `gerencial.ventaunificada`
-8. Dashboard gerencial:
-	- Vistas KPI en PostgreSQL + consultas en `dashboard/sql/consultas_dashboard.sql`
-9. Proyecto contenedorizado:
-	- Todo se ejecuta con `docker compose up --build`
+```
+proyecto/
+├── docker-compose.yml
+├── docker/
+│   └── etl.Dockerfile
+├── docs/
+│   ├── esquema_postgresql.md
+│   └── esquema_mysql.md
+├── diagramas/
+│   ├── erd_etheria_postgresql.pdf
+│   └── erd_dynamicbrands_mysql.pdf
+├── postgresql/
+│   ├── 01_ddl_etheria.sql
+│   ├── 02_sp_etheria.sql
+│   ├── 03_seed_orquestacion_etheria.sql
+│   ├── 04_ddl_gerencial.sql
+│   └── 05_vistas_kpi.sql
+├── mysql/
+│   ├── 01_ddl_dynamic.sql
+│   ├── 02_sp_dynamic.sql
+│   └── 03_seed_orquestacion_dynamic.sql
+├── integracion/
+│   ├── python/
+│   │   ├── etl_unificacion.py
+│   │   └── requirements.txt
+│   └── sql/
+│       └── consultas_unificacion_validacion.sql
+└── dashboard/
+    └── consultas_dashboard.sql
+```
 
-## Arquitectura tecnica
-1. PostgreSQL (`etheria`): origen de costos de importacion, inventario, tipo de cambio y catalogo base.
-2. MySQL (`dynamicbrands`): origen de demanda digital, sitios, ordenes, detalle y courier.
-3. ETL (`etl_unificacion`): extrae ventas de MySQL, enriquece con costos/tipo de cambio en PostgreSQL y consolida en `gerencial.ventaunificada`.
-4. Dashboard (`metabase`): consume vistas KPI desde PostgreSQL.
+---
 
-## Ejecucion del proyecto
-### Levantar todo
+## Requisitos previos
+
+- Docker Desktop instalado y corriendo
+- Puertos disponibles: `5432`, `3306`, `3000`
+
+---
+
+## Levantar el proyecto
+
 ```bash
 docker compose up --build
 ```
 
-### Accesos
-- PostgreSQL:
-  - Host: `localhost`
-  - Puerto: `5432`
-  - DB: `etheria`
-  - User: `etheria_user`
-  - Password: `etheria_pass`
-- MySQL:
-  - Host: `localhost`
-  - Puerto: `3306`
-  - DB: `dynamicbrands`
-  - User: `dynamic_user`
-  - Password: `dynamic_pass`
-- Metabase:
-  - URL: `http://localhost:3000`
+Este único comando levanta:
+- PostgreSQL 16 con los esquemas `etheria` y `gerencial` ya creados y con datos
+- MySQL 8.4 con el esquema `dynamicbrands` ya creado y con datos
+- El ETL que cruza ambas fuentes y puebla `gerencial.ventaunificada`
+- Metabase en `http://localhost:3000` para el dashboard gerencial
 
-### Volver a ejecutar ETL manualmente
+Si necesitan resetear todo desde cero:
+
 ```bash
-docker compose run --rm etl_unificacion
+docker compose down -v
+docker compose up --build
 ```
 
-## Evidencia de analitica gerencial
-### Pregunta 1: rentabilidad real por categoria (costos USD vs ventas moneda local)
-Usar vista: `gerencial.vistarentabilidadcategoria`
+---
 
-### Pregunta 2: marca IA mas efectiva frente a costos de importacion
-Usar vista: `gerencial.vistaefectividadmarca`
+## Credenciales
 
-### Pregunta 3: margen por pais incluyendo shipping y permisos
-Usar vista: `gerencial.vistamargenpais`
+| Servicio | Host | Puerto | Base | Usuario | Contraseña |
+|---|---|---|---|---|---|
+| PostgreSQL | localhost | 5432 | etheria | etheria_user | etheria_pass |
+| MySQL | localhost | 3306 | dynamicbrands | dynamic_user | dynamic_pass |
+| Metabase | localhost | 3000 | — | configurar al inicio | — |
 
-### Pregunta 4: comparacion compra vs venta por producto
-Usar vista: `gerencial.vistacomparacioncompraventaproducto`
+---
 
-Consultas listas en:
-- `dashboard/sql/consultas_dashboard.sql`
-- `integracion/sql/consultas_unificacion_validacion.sql`
+## Datos de prueba cargados
 
-## Estrategia para hoy y para futuro
-1. Hoy:
-	- Integracion por ETL batch determinista, repetible y auditable.
-	- Tabla unificada denormalizada para dashboard y respuesta rapida.
-2. Futuro:
-	- Programar ETL incremental por ventana de fechas y CDC.
-	- Agregar historico de tasas de cambio intradia.
-	- Implementar capa semantica para consultas en lenguaje natural.
-	- Exponer metadatos de negocio para BI asistido por IA.
+| Dato | Cantidad |
+|---|---|
+| Países | 5 (Nicaragua, Colombia, Perú, Costa Rica, México) |
+| Categorías | 5 (aceites, bebidas, alimentos, cosmética, jabonería) |
+| Proveedores | 5 |
+| Productos base | 100 (PRD0001 a PRD0100) |
+| Marcas IA | 3 (auraviva, nativaflux, dermaterra) |
+| Sitios web | 9 (3 marcas × 3 países cada una) |
+| Órdenes de venta | 120 |
+| Importaciones | 20 |
 
-## Consultas en lenguaje natural (vision futura)
-El modelo ya deja una base adecuada porque:
-- `gerencial.ventaunificada` concentra dimensiones y metricas en una sola entidad analitica.
-- Las vistas KPI encapsulan reglas de negocio reutilizables.
-- El diccionario de nombres en espanol ayuda a mapear prompts de negocio hacia SQL.
+---
 
-## Control de calidad recomendado antes de entrega
-1. Ejecutar `docker compose down -v`.
-2. Ejecutar `docker compose up --build`.
-3. Confirmar en PostgreSQL:
-	- `select count(*) from etheria.pais;` debe ser 5.
-	- `select count(*) from etheria.productobase;` debe ser 100.
-4. Confirmar en MySQL:
-	- `select count(*) from sitioweb;` debe ser 9.
-5. Ejecutar ETL y validar:
-	- `select count(*) from gerencial.ventaunificada;` mayor que 0.
-6. Validar vistas KPI desde Metabase o SQL.
+## Opción 1 — Dashboard en Metabase
 
-## Nota de entrega academica
-La fecha/hora de finalizacion se valida con el ultimo commit del repositorio. Registrar aportes de ambos integrantes durante el desarrollo para la revision con el profesor.
+1. Abrir `http://localhost:3000`
+2. Crear cuenta administrador de Metabase
+3. Agregar conexión PostgreSQL:
+   - Host: `postgres_etheria`
+   - Puerto: `5432`
+   - Base de datos: `etheria`
+   - Usuario: `etheria_user`
+   - Contraseña: `etheria_pass`
+4. Agregar conexión MySQL:
+   - Host: `mysql_dynamic`
+   - Puerto: `3306`
+   - Base de datos: `dynamicbrands`
+   - Usuario: `dynamic_user`
+   - Contraseña: `dynamic_pass`
+5. Crear nueva pregunta → SQL nativo → seleccionar conexión PostgreSQL
+6. Pegar cada consulta del archivo `dashboard/consultas_dashboard.sql`
+7. Guardar cada consulta y agregarla al dashboard gerencial
+
+### Indicadores disponibles en el dashboard
+
+| Consulta | Indicador |
+|---|---|
+| 1 | Rentabilidad por categoría |
+| 2 | Efectividad de marcas IA |
+| 3 | Margen por país |
+| 4 | Comparación precio compra vs venta por producto |
+| 5 | Top 20 combinaciones país-sitio con mayor margen |
+| 6 | Eficiencia logística por país |
+
+---
+
+## Opción 2 — Consultas directas por Query Tool
+
+Conectarse a PostgreSQL con cualquier cliente SQL (pgAdmin, DBeaver, psql) usando las credenciales de la tabla anterior.
+
+### Vistas KPI disponibles (esquema gerencial)
+
+```sql
+-- Rentabilidad por categoría
+select * from gerencial.vistarentabilidadcategoria;
+
+-- Efectividad de marcas IA
+select * from gerencial.vistaefectividadmarca;
+
+-- Margen por país
+select * from gerencial.vistamargenpais;
+
+-- Comparación compra vs venta por producto
+select * from gerencial.vistacomparacioncompraventaproducto;
+```
+
+### Consultas de validación de integración
+
+Las consultas del archivo `integracion/sql/consultas_unificacion_validacion.sql` demuestran que los datos unificados responden las preguntas gerenciales del caso:
+
+```sql
+-- A. Rentabilidad de una categoría con costo en USD y venta en moneda local
+-- B. Marca IA más efectiva contra costos de importación
+-- C. Margen por país incluyendo shipping y permisos sanitarios
+-- D. Vista plana para consultas en lenguaje natural
+```
+
+---
+
+## Preguntas gerenciales que el sistema responde
+
+| Pregunta | Cómo se responde |
+|---|---|
+| ¿Cuál es la rentabilidad real de una categoría si el costo es en USD y la venta en moneda local? | `vistarentabilidadcategoria` — convierte todo a USD usando `tipocambio` |
+| ¿Qué marca generada por IA es más efectiva comparada con costos de importación? | `vistaefectividadmarca` — cruza ventas de MySQL con costos de PostgreSQL |
+| ¿Cuál es el margen por país considerando gastos de envío y permisos? | `vistamargenpais` — incluye `costoshippinglocal`, `permisosanitariolocal` y `costocourierlocal` |
+
+---
+
+## ¿Funciona con consultas en lenguaje natural?
+
+Sí. La tabla `gerencial.ventaunificada` es una tabla de hechos denormalizada — todos los campos relevantes están en una sola fila sin necesidad de joins. Esto la hace compatible con herramientas de consulta en lenguaje natural basadas en LLMs, ya que el modelo puede generar SQL directamente sobre una estructura plana. La consulta D en `integracion/sql/consultas_unificacion_validacion.sql` muestra la estructura disponible para ese propósito.
+
+---
+
+## Scripts SQL por motor
+
+### PostgreSQL — orden de ejecución
+| Archivo | Contenido |
+|---|---|
+| `01_ddl_etheria.sql` | Esquema `etheria` con 17 tablas |
+| `02_sp_etheria.sql` | Stored Procedures con manejo de excepciones y SP de logging |
+| `03_seed_orquestacion_etheria.sql` | Orquestación del llenado de datos |
+| `04_ddl_gerencial.sql` | Tabla `gerencial.ventaunificada` |
+| `05_vistas_kpi.sql` | 4 vistas gerenciales de KPI |
+
+### MySQL — orden de ejecución
+| Archivo | Contenido |
+|---|---|
+| `01_ddl_dynamic.sql` | Esquema `dynamicbrands` con 9 tablas |
+| `02_sp_dynamic.sql` | Stored Procedures con manejo de excepciones y SP de logging |
+| `03_seed_orquestacion_dynamic.sql` | Orquestación del llenado de datos |
+
+---
+
+## ETL — Integración entre motores
+
+El archivo `integracion/python/etl_unificacion.py` realiza las siguientes operaciones:
+
+1. Lee todas las órdenes entregadas desde MySQL (`ordenventa`, `ordenventadetalle`, `despacho`)
+2. Por cada línea de venta, consulta en PostgreSQL el producto (`productobase`) y su costo de importación (`importaciondetalle`)
+3. Obtiene la tasa de cambio vigente desde `etheria.tipocambio` para convertir moneda local a USD
+4. Calcula `ingresousd`, `costototalusd`, `margenusd` y `margenporcentaje`
+5. Inserta el resultado en `gerencial.ventaunificada` — si ya existe la combinación `(codigoordenventa, codigoproducto)` actualiza el registro
+
+La columna de integración entre ambos motores es `codigoproductoetheria` en MySQL, que referencia lógicamente a `codigoproducto` en `etheria.productobase`.
