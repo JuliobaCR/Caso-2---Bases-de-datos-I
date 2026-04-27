@@ -13,6 +13,8 @@ Sistema integrado y contenedorizado que conecta dos empresas del mismo holding:
 
 Un proceso ETL cruza ambas fuentes y consolida los datos en un esquema gerencial (`gerencial.ventaunificada`) que alimenta un dashboard de rentabilidad en Metabase.
 
+Además, se incorporaron varias mejoras recomendadas en la carpeta `REVISION/`: catálogo de monedas, atributos variables de producto, historial de despacho, validaciones más estrictas e idempotencia en los seeds.
+
 ---
 
 ## Estructura del repositorio
@@ -212,7 +214,7 @@ El archivo `integracion/python/etl_unificacion.py` realiza las siguientes operac
 1. Lee todas las órdenes entregadas desde MySQL (`ordenventa`, `ordenventadetalle`, `despacho`)
 2. Por cada línea de venta, consulta en PostgreSQL el producto (`productobase`) y su costo de importación (`importaciondetalle`)
 3. Obtiene la tasa de cambio vigente desde `etheria.tipocambio` para convertir moneda local a USD
-4. Calcula `ingresousd`, `costototalusd`, `margenusd` y `margenporcentaje`
+4. Calcula `ingresousd`, `costoproductousd`, `costosimportacionusd`, `costoslogisticosusd`, `costototalusd`, `margenusd` y `margenporcentaje`
 5. Inserta el resultado en `gerencial.ventaunificada` — si ya existe la combinación `(codigoordenventa, codigoproducto)` actualiza el registro
 
 La columna de integración entre ambos motores es `codigoproductoetheria` en MySQL, que referencia lógicamente a `codigoproducto` en `etheria.productobase`.

@@ -26,6 +26,19 @@ begin
 
     start transaction;
 
+    insert into moneda(codigomoneda, nombremoneda, simbolomoneda)
+    values
+        ('NIO', 'Cordoba nicaraguense', 'C$'),
+        ('COP', 'Peso colombiano', '$'),
+        ('PEN', 'Sol peruano', 'S/'),
+        ('CRC', 'Colon costarricense', '₡'),
+        ('MXN', 'Peso mexicano', '$')
+    as nuevo
+    on duplicate key update
+        nombremoneda = nuevo.nombremoneda,
+        simbolomoneda = nuevo.simbolomoneda,
+        activa = 1;
+
     insert into pais(codigopaisiso, nombrepais, codigomoneda, monedaoficial)
     values
         ('NI', 'Nicaragua', 'NIO', 'Cordoba nicaraguense'),
@@ -66,7 +79,7 @@ begin
         descripcionmarca = nuevo.descripcionmarca,
         estado = nuevo.estado;
 
-    insert into sitioweb(codigositio, idmarcaia, idpais, dominioweb, idioma, monedaoperacion, estado, fechainicio, fechacierre)
+    insert into sitioweb(codigositio, idmarcaia, idpais, dominioweb, idioma, monedaoperacion, configuracionjson, estado, fechainicio, fechacierre)
     select
         datos.codigositio,
         m.idmarcaia,
@@ -74,6 +87,12 @@ begin
         datos.dominioweb,
         'es',
         p.codigomoneda,
+        json_object(
+            'logo', concat('https://cdn.dynamicbrands.local/', m.nombremarca, '/logo.png'),
+            'tema', 'premium-natural',
+            'marca', m.nombremarca,
+            'pais', p.codigopaisiso
+        ),
         'activo',
         current_date,
         null
@@ -95,6 +114,7 @@ begin
         idpais = values(idpais),
         idioma = values(idioma),
         monedaoperacion = values(monedaoperacion),
+        configuracionjson = values(configuracionjson),
         estado = values(estado),
         fechainicio = values(fechainicio),
         fechacierre = null;
@@ -110,6 +130,7 @@ begin
     declare vsitio bigint;
     declare vcliente bigint;
     declare vorden bigint;
+    declare vdespacho bigint;
     declare vcodigositio varchar(40);
     declare vcodigopais char(2);
     declare vcantidad decimal(14,2);
@@ -174,6 +195,7 @@ begin
             codigoordenventa,
             idsitioweb,
             idclientefinal,
+            codigomoneda,
             fechaorden,
             estadoorden,
             totalmonedalocal,
@@ -186,6 +208,7 @@ begin
             concat('OV', date_format(current_date, '%Y%m'), lpad(i, 5, '0')),
             vsitio,
             vcliente,
+            (select p.codigomoneda from sitioweb s inner join pais p on p.idpais = s.idpais where s.idsitioweb = vsitio),
             now() - interval (i mod 7) day,
             'entregada',
             round(vcantidad * vprecio, 4),
@@ -206,15 +229,14 @@ begin
         from ordenventa
         where codigoordenventa = concat('OV', date_format(current_date, '%Y%m'), lpad(i, 5, '0'));
 
-        insert into ordenventadetalle(idordenventa, codigoproductoetheria, nombreproductomarca, cantidad, preciounitariolocal, subtotal)
+        insert into ordenventadetalle(idordenventa, codigoproductoetheria, nombreproductomarca, cantidad, preciounitariolocal)
         values
-            (vorden, concat('PRD', lpad(((i - 1) mod 100) + 1, 4, '0')), concat('producto marca ', i), vcantidad, vprecio, round(vcantidad * vprecio, 4)),
-            (vorden, concat('PRD', lpad(((i + 17) mod 100) + 1, 4, '0')), concat('producto marca adicional ', i), 1, vprecio * 0.85, round(vprecio * 0.85, 4))
+            (vorden, concat('PRD', lpad(((i - 1) mod 100) + 1, 4, '0')), concat('producto marca ', i), vcantidad, vprecio),
+            (vorden, concat('PRD', lpad(((i + 17) mod 100) + 1, 4, '0')), concat('producto marca adicional ', i), 1, vprecio * 0.85)
         on duplicate key update
             nombreproductomarca = values(nombreproductomarca),
             cantidad = values(cantidad),
-            preciounitariolocal = values(preciounitariolocal),
-            subtotal = values(subtotal);
+            preciounitariolocal = values(preciounitariolocal);
 
         insert into despacho(
             idordenventa,
@@ -245,6 +267,18 @@ begin
             estadodespacho = 'entregado',
             costocourierlocal = values(costocourierlocal),
             observacion = values(observacion);
+
+        select iddespacho into vdespacho
+        from despacho
+        where codigoguia = concat('GUIA', date_format(current_date, '%Y%m'), lpad(i, 6, '0'));
+
+        insert into despachoseguimiento(iddespacho, estadodespacho, comentario)
+        values
+            (vdespacho, 'saliohub', 'Salida inicial desde el hub'),
+            (vdespacho, 'entransito', 'Movimiento en curso hacia destino'),
+            (vdespacho, 'entregado', 'Entrega confirmada')
+        on duplicate key update
+            comentario = values(comentario);
 
         set i = i + 1;
     end while;

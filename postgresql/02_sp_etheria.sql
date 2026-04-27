@@ -1,5 +1,81 @@
 set search_path = public;
 
+create or replace procedure etheria.sp_registrarmovimientoinventario(
+    pidloteinventario bigint,
+    ptipomovimiento varchar,
+    porigenmovimiento varchar,
+    pcantidad numeric,
+    preferenciaexterna varchar,
+    pobservacion text
+)
+language plpgsql
+as $$
+declare
+    vsaldoactual numeric(14,2);
+    vsaldofinal numeric(14,2);
+begin
+    if pcantidad <= 0 then
+        raise exception 'La cantidad del movimiento debe ser mayor que cero';
+    end if;
+
+    if ptipomovimiento not in ('entrada', 'salida', 'ajuste') then
+        raise exception 'Tipo de movimiento invalido: %', ptipomovimiento;
+    end if;
+
+    select cantidaddisponible
+    into vsaldoactual
+    from etheria.loteinventario
+    where idloteinventario = pidloteinventario
+    for update;
+
+    if not found then
+        raise exception 'No existe el lote %', pidloteinventario;
+    end if;
+
+    if ptipomovimiento = 'salida' and vsaldoactual < pcantidad then
+        raise exception 'No hay inventario suficiente en el lote %', pidloteinventario;
+    end if;
+
+    vsaldofinal := case
+        when ptipomovimiento = 'salida' then vsaldoactual - pcantidad
+        else vsaldoactual + pcantidad
+    end;
+
+    update etheria.loteinventario
+    set cantidaddisponible = vsaldofinal,
+        estado = case
+            when vsaldofinal = 0 then 'agotado'
+            when vsaldofinal < cantidadinicial then 'reservado'
+            else 'disponible'
+        end
+    where idloteinventario = pidloteinventario;
+
+    insert into etheria.movimientosinventario(
+        idloteinventario,
+        tipomovimiento,
+        origenmovimiento,
+        cantidad,
+        referenciaexterna,
+        observacion,
+        saldoresultante
+    )
+    values (
+        pidloteinventario,
+        ptipomovimiento,
+        porigenmovimiento,
+        pcantidad,
+        preferenciaexterna,
+        pobservacion,
+        vsaldofinal
+    )
+    on conflict (idloteinventario, tipomovimiento, referenciaexterna) do update
+    set cantidad = excluded.cantidad,
+        observacion = excluded.observacion,
+        saldoresultante = excluded.saldoresultante,
+        fechamovimiento = now();
+end;
+$$;
+
 create or replace procedure etheria.sp_registrarlogcarga(
     pmodulo varchar,
     ptablaobjetivo varchar,
@@ -36,6 +112,19 @@ as $$
 declare
     vfilas integer := 0;
 begin
+    insert into etheria.moneda(codigomoneda, nombremoneda, simbolomoneda)
+    values
+        ('NIO', 'Cordoba nicaraguense', 'C$'),
+        ('COP', 'Peso colombiano', '$'),
+        ('PEN', 'Sol peruano', 'S/'),
+        ('CRC', 'Colon costarricense', '₡'),
+        ('MXN', 'Peso mexicano', '$')
+    on conflict (codigomoneda) do update
+    set
+        nombremoneda = excluded.nombremoneda,
+        simbolomoneda = excluded.simbolomoneda,
+        activa = true;
+
     insert into etheria.pais(codigopaisiso, nombrepais, codigomoneda, monedaoficial)
     values
         ('NI', 'Nicaragua', 'NIO', 'Cordoba nicaraguense'),
@@ -139,7 +228,8 @@ begin
             tipouso,
             unidadmedida,
             ingredientebase,
-            beneficiosalud
+            beneficiosalud,
+            atributosjsonb
         )
         values (
             'PRD' || lpad(i::text, 4, '0'),
@@ -148,13 +238,20 @@ begin
             vtipouso,
             'unidad',
             'Extracto natural lote ' || i,
-            'Apoyo integral al bienestar con formulacion premium ' || i
+            'Apoyo integral al bienestar con formulacion premium ' || i,
+            jsonb_build_object(
+                'presentacion', 'unidad',
+                'origen', 'natural',
+                'intensidad', case when i % 3 = 0 then 'alta' when i % 3 = 1 then 'media' else 'baja' end,
+                'variacion', i
+            )
         )
         on conflict (codigoproducto) do update
         set
             nombreproducto = excluded.nombreproducto,
             idcategoria = excluded.idcategoria,
             tipouso = excluded.tipouso,
+            atributosjsonb = excluded.atributosjsonb,
             activo = true
         returning idproductobase into vidproducto;
 
@@ -255,11 +352,11 @@ begin
             cantidadbulk = excluded.cantidadbulk,
             costounitariousd = excluded.costounitariousd;
 
-        insert into etheria.costosimportacion(idimportacion, tipocosto, montousd, descripcion)
+        insert into etheria.costosimportacion(idimportacion, tipocosto, tipovalor, valorreferencia, basecalculo, montousd, descripcion)
         values
-            (vidimportacion, 'flete', 250 + i * 4, 'Costo de flete internacional'),
-            (vidimportacion, 'seguro', 80 + i * 1.2, 'Seguro de carga internacional'),
-            (vidimportacion, 'arancel', 120 + i * 2.5, 'Arancel de ingreso')
+            (vidimportacion, 'flete', 'monto', 250 + i * 4, 0, 250 + i * 4, 'Costo de flete internacional'),
+            (vidimportacion, 'seguro', 'monto', 80 + i * 1.2, 0, 80 + i * 1.2, 'Seguro de carga internacional'),
+            (vidimportacion, 'arancel', 'monto', 120 + i * 2.5, 0, 120 + i * 2.5, 'Arancel de ingreso')
         on conflict do nothing;
     end loop;
 
@@ -268,29 +365,33 @@ begin
         'LTP' || lpad(idet.idimportaciondetalle::text, 8, '0'),
         idet.idimportaciondetalle,
         idet.cantidadbulk,
-        greatest(idet.cantidadbulk - 10, 0),
+            0,
         current_date + interval '365 days',
         'disponible'
     from etheria.importaciondetalle idet
     on conflict (codigolote) do update
-    set cantidaddisponible = excluded.cantidaddisponible,
-        estado = 'disponible';
+        set estado = 'disponible';
 
-    insert into etheria.movimientosinventario(idloteinventario, tipomovimiento, origenmovimiento, cantidad, referenciaexterna, observacion)
-    select
-        li.idloteinventario,
-        'entrada',
-        'importacion',
-        li.cantidadinicial,
-        li.codigolote,
-        'Entrada inicial por recepcion de importacion'
-    from etheria.loteinventario li
-    where not exists (
-        select 1
-        from etheria.movimientosinventario mi
-        where mi.idloteinventario = li.idloteinventario
-          and mi.tipomovimiento = 'entrada'
-    );
+    for vidimportacion in
+        select li.idloteinventario
+        from etheria.loteinventario li
+        where not exists (
+            select 1
+            from etheria.movimientosinventario mi
+            where mi.idloteinventario = li.idloteinventario
+              and mi.tipomovimiento = 'entrada'
+              and mi.referenciaexterna = li.codigolote
+        )
+    loop
+        call etheria.sp_registrarmovimientoinventario(
+            vidimportacion,
+            'entrada',
+            'importacion',
+            (select cantidadinicial from etheria.loteinventario where idloteinventario = vidimportacion),
+            (select codigolote from etheria.loteinventario where idloteinventario = vidimportacion),
+            'Entrada inicial por recepcion de importacion'
+        );
+    end loop;
 
     select count(*) into vfilas from etheria.importacion;
     call etheria.sp_registrarlogcarga('etheria', 'importacion', 'carga importaciones', 'ok', vfilas, 'importaciones demo generadas');

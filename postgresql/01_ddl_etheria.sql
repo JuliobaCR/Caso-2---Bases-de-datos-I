@@ -3,6 +3,14 @@ set search_path = public;
 create schema if not exists etheria;
 create schema if not exists gerencial;
 
+create table if not exists etheria.moneda (
+    codigomoneda char(3) primary key,
+    nombremoneda varchar(50) not null unique,
+    simbolomoneda varchar(10),
+    activa boolean not null default true,
+    fechacreacion timestamp not null default now()
+);
+
 create table if not exists etheria.pais (
     idpais bigserial primary key,
     codigopaisiso char(2) not null unique,
@@ -10,7 +18,8 @@ create table if not exists etheria.pais (
     codigomoneda char(3) not null,
     monedaoficial varchar(50) not null,
     activo boolean not null default true,
-    fechacreacion timestamp not null default now()
+    fechacreacion timestamp not null default now(),
+    constraint fk_pais_moneda foreign key (codigomoneda) references etheria.moneda(codigomoneda)
 );
 
 create table if not exists etheria.categoria (
@@ -40,6 +49,7 @@ create table if not exists etheria.productobase (
     unidadmedida varchar(20) not null,
     ingredientebase varchar(200),
     beneficiosalud text,
+    atributosjsonb jsonb not null default '{}'::jsonb,
     activo boolean not null default true,
     fechacreacion timestamp not null default now()
 );
@@ -61,6 +71,7 @@ create table if not exists etheria.requisitolegal (
     nombrerequisito varchar(120) not null,
     entidadreguladora varchar(120) not null,
     descripcion text,
+    urlreferencia varchar(255),
     obligatorio boolean not null default true,
     fechacreacion timestamp not null default now(),
     constraint uk_requisito unique (nombrerequisito, entidadreguladora)
@@ -82,7 +93,7 @@ create table if not exists etheria.importacion (
     estadoimportacion varchar(20) not null check (estadoimportacion in ('pedido', 'transito', 'recibido', 'cerrado')),
     fechapedido date not null,
     fechallegadacaribe date,
-    observaciones text,
+    observaciones varchar(500),
     fechacreacion timestamp not null default now()
 );
 
@@ -102,7 +113,7 @@ create table if not exists etheria.loteinventario (
     codigolote varchar(40) not null unique,
     idimportaciondetalle bigint not null references etheria.importaciondetalle(idimportaciondetalle),
     cantidadinicial numeric(14,2) not null check (cantidadinicial > 0),
-    cantidaddisponible numeric(14,2) not null check (cantidaddisponible >= 0),
+    cantidaddisponible numeric(14,2) not null default 0 check (cantidaddisponible >= 0),
     fechavencimiento date,
     estado varchar(20) not null check (estado in ('disponible', 'reservado', 'agotado', 'vencido')),
     fechacreacion timestamp not null default now()
@@ -116,13 +127,20 @@ create table if not exists etheria.movimientosinventario (
     cantidad numeric(14,2) not null check (cantidad > 0),
     referenciaexterna varchar(80),
     observacion text,
+    saldoresultante numeric(14,2) not null default 0,
     fechamovimiento timestamp not null default now()
 );
+
+create unique index if not exists uk_movimientosinventario_lote_ref
+    on etheria.movimientosinventario(idloteinventario, tipomovimiento, referenciaexterna);
 
 create table if not exists etheria.costosimportacion (
     idcostoimportacion bigserial primary key,
     idimportacion bigint not null references etheria.importacion(idimportacion),
     tipocosto varchar(30) not null check (tipocosto in ('flete', 'seguro', 'arancel', 'agenciaaduanal', 'almacenaje', 'otro')),
+    tipovalor varchar(15) not null default 'monto' check (tipovalor in ('monto', 'porcentaje')),
+    valorreferencia numeric(14,4) not null default 0,
+    basecalculo numeric(14,4) not null default 0,
     montousd numeric(14,4) not null check (montousd >= 0),
     descripcion text,
     fecharegistro timestamp not null default now()
@@ -146,6 +164,7 @@ create table if not exists etheria.ordenabastecimientodetalle (
     cantidadsolicitada numeric(14,2) not null check (cantidadsolicitada > 0),
     cantidadasignada numeric(14,2) not null default 0 check (cantidadasignada >= 0),
     preciosalidamonedalocal numeric(14,4) not null default 0,
+    constraint ck_ordenabdetalle_cantidades check (cantidadasignada <= cantidadsolicitada),
     constraint uk_ordenabdetalle unique (idordenabastecimiento, idproductobase)
 );
 
@@ -183,5 +202,6 @@ create index if not exists ix_productobase_categoria on etheria.productobase(idc
 create index if not exists ix_productopais_pais on etheria.productopais(idpaisdestino);
 create index if not exists ix_importacion_estado on etheria.importacion(estadoimportacion);
 create index if not exists ix_loteinventario_estado on etheria.loteinventario(estado);
+create index if not exists ix_movimientosinventario_lote_fecha on etheria.movimientosinventario(idloteinventario, fechamovimiento desc);
 create index if not exists ix_tipocambio_fechatasa on etheria.tipocambio(fechatasa);
 create index if not exists ix_logcargaproceso_fecha on etheria.logcargaproceso(fecharegistro);

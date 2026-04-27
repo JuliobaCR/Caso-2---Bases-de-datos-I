@@ -52,7 +52,8 @@ def cargar_ventas_mysql(conn_mysql):
         inner join pais p on p.idpais = s.idpais
         inner join ordenventadetalle ovd on ovd.idordenventa = ov.idordenventa
         left join despacho d on d.idordenventa = ov.idordenventa
-        where ov.estadoorden in ('pagada', 'despachada', 'entregada')
+            and d.estadodespacho = 'entregado'
+        where ov.estadoorden = 'entregada'
     """
     with conn_mysql.cursor() as cursor:
         cursor.execute(consulta)
@@ -64,12 +65,18 @@ def obtener_contexto_producto(conn_pg, codigoproducto):
         select
             pb.nombreproducto,
             c.nombrecategoria,
-            coalesce(avg(idt.costounitariousd), 0) as costoproductousd
+            coalesce(ultimocosto.costounitariousd, 0) as costoproductousd
         from etheria.productobase pb
         inner join etheria.categoria c on c.idcategoria = pb.idcategoria
-        left join etheria.importaciondetalle idt on idt.idproductobase = pb.idproductobase
+        left join lateral (
+            select idt.costounitariousd
+            from etheria.importaciondetalle idt
+            inner join etheria.importacion imp on imp.idimportacion = idt.idimportacion
+            where idt.idproductobase = pb.idproductobase
+            order by imp.fechallegadacaribe desc nulls last, imp.fechapedido desc, idt.idimportaciondetalle desc
+            limit 1
+        ) ultimocosto on true
         where pb.codigoproducto = %s
-        group by pb.nombreproducto, c.nombrecategoria
     """
     with conn_pg.cursor() as cursor:
         cursor.execute(consulta, (codigoproducto,))
@@ -77,6 +84,22 @@ def obtener_contexto_producto(conn_pg, codigoproducto):
     if not fila:
         return ("producto no mapeado", "sin categoria", Decimal("0"))
     return fila
+
+
+def obtener_costo_importacion_unitario(conn_pg):
+    consulta = """
+        select
+            coalesce((select sum(ci.montousd) from etheria.costosimportacion ci), 0) as costototal,
+            coalesce((select sum(idt.cantidadbulk) from etheria.importaciondetalle idt), 0) as unidades
+    """
+    with conn_pg.cursor() as cursor:
+        cursor.execute(consulta)
+        fila = cursor.fetchone()
+    costototal = Decimal(str(fila[0] or 0))
+    unidades = Decimal(str(fila[1] or 0))
+    if unidades == 0:
+        return Decimal("0")
+    return costototal / unidades
 
 
 def obtener_tasa_cambio(conn_pg, codigopaisiso, fechaorden):
@@ -97,19 +120,8 @@ def obtener_tasa_cambio(conn_pg, codigopaisiso, fechaorden):
     return Decimal("1")
 
 
-def cargar_costos_importacion_promedio(conn_pg):
-    consulta = """
-        select coalesce(avg(ci.montousd), 0)
-        from etheria.costosimportacion ci
-    """
-    with conn_pg.cursor() as cursor:
-        cursor.execute(consulta)
-        fila = cursor.fetchone()
-    return Decimal(str(fila[0] or 0))
-
-
 def construir_ventas_unificadas(filas_mysql, conn_pg):
-    costo_importacion_promedio = cargar_costos_importacion_promedio(conn_pg)
+    costo_importacion_unitario = obtener_costo_importacion_unitario(conn_pg)
     filas_unificadas = []
 
     for fila in filas_mysql:
@@ -130,9 +142,9 @@ def construir_ventas_unificadas(filas_mysql, conn_pg):
 
         ingresousd = subtotal_local / tasacambio
         costoslogisticosusd = (shipping_local + permiso_local + courier_local) / tasacambio
-        costo_producto_total = costoproductousd * cantidad
-        costo_importacion_distribuido = costo_importacion_promedio / Decimal("10")
-        costototalusd = costo_producto_total + costo_importacion_distribuido + costoslogisticosusd
+        costosimportacionusd = costo_importacion_unitario * cantidad
+        costoproductototalusd = costoproductousd * cantidad
+        costototalusd = costoproductototalusd + costosimportacionusd + costoslogisticosusd
         margenusd = ingresousd - costototalusd
         margenporcentaje = Decimal("0") if ingresousd == 0 else (margenusd / ingresousd) * Decimal("100")
 
@@ -158,7 +170,7 @@ def construir_ventas_unificadas(filas_mysql, conn_pg):
                 tasacambio,
                 ingresousd,
                 costoproductousd,
-                costo_importacion_distribuido,
+                costosimportacionusd,
                 costoslogisticosusd,
                 costototalusd,
                 margenusd,
