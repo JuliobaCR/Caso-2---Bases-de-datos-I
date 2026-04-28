@@ -315,6 +315,8 @@ declare
     vidimportacion bigint;
     vidproveedor bigint;
     vfilas integer := 0;
+    vcantidadinicial numeric;
+    vcodigolote varchar;
 begin
     for i in 1..pimportaciones loop
         select idproveedor into vidproveedor
@@ -383,12 +385,17 @@ begin
               and mi.referenciaexterna = li.codigolote
         )
     loop
+        select cantidadinicial, codigolote
+        into vcantidadinicial, vcodigolote
+        from etheria.loteinventario
+        where idloteinventario = vidimportacion;
+
         call etheria.sp_registrarmovimientoinventario(
             vidimportacion,
             'entrada',
             'importacion',
-            (select cantidadinicial from etheria.loteinventario where idloteinventario = vidimportacion),
-            (select codigolote from etheria.loteinventario where idloteinventario = vidimportacion),
+            vcantidadinicial,
+            vcodigolote,
             'Entrada inicial por recepcion de importacion'
         );
     end loop;
