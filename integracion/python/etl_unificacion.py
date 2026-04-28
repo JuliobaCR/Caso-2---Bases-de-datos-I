@@ -1,4 +1,5 @@
 import os
+import time
 from decimal import Decimal
 
 import psycopg2
@@ -6,26 +7,52 @@ import pymysql
 from psycopg2.extras import execute_values
 
 
-def obtener_conexion_postgres():
-    return psycopg2.connect(
-        host=os.getenv("PG_HOST", "localhost"),
-        port=int(os.getenv("PG_PORT", "5432")),
-        dbname=os.getenv("PG_DB", "etheria"),
-        user=os.getenv("PG_USER", "etheria_user"),
-        password=os.getenv("PG_PASSWORD", "etheria_pass"),
-    )
+def obtener_conexion_postgres(reintentos=5, espera=3):
+    """Conecta a PostgreSQL con reintentos"""
+    for intento in range(1, reintentos + 1):
+        try:
+            conn = psycopg2.connect(
+                host=os.getenv("PG_HOST", "localhost"),
+                port=int(os.getenv("PG_PORT", "5432")),
+                dbname=os.getenv("PG_DB", "etheria"),
+                user=os.getenv("PG_USER", "etheria_user"),
+                password=os.getenv("PG_PASSWORD", "etheria_pass"),
+            )
+            print(f"✅ Conectado a PostgreSQL (intento {intento})")
+            return conn
+        except psycopg2.OperationalError as e:
+            if intento < reintentos:
+                print(f"⚠️ Error conectando PostgreSQL (intento {intento}/{reintentos}): {e}")
+                print(f"   Esperando {espera}s...")
+                time.sleep(espera)
+            else:
+                print(f"❌ No se pudo conectar a PostgreSQL después de {reintentos} intentos")
+                raise
 
 
-def obtener_conexion_mysql():
-    return pymysql.connect(
-        host=os.getenv("MYSQL_HOST", "localhost"),
-        port=int(os.getenv("MYSQL_PORT", "3306")),
-        user=os.getenv("MYSQL_USER", "dynamic_user"),
-        password=os.getenv("MYSQL_PASSWORD", "dynamic_pass"),
-        database=os.getenv("MYSQL_DB", "dynamicbrands"),
-        charset="utf8mb4",
-        cursorclass=pymysql.cursors.DictCursor,
-    )
+def obtener_conexion_mysql(reintentos=5, espera=3):
+    """Conecta a MySQL con reintentos"""
+    for intento in range(1, reintentos + 1):
+        try:
+            conn = pymysql.connect(
+                host=os.getenv("MYSQL_HOST", "localhost"),
+                port=int(os.getenv("MYSQL_PORT", "3306")),
+                user=os.getenv("MYSQL_USER", "dynamic_user"),
+                password=os.getenv("MYSQL_PASSWORD", "dynamic_pass"),
+                database=os.getenv("MYSQL_DB", "dynamicbrands"),
+                charset="utf8mb4",
+                cursorclass=pymysql.cursors.DictCursor,
+            )
+            print(f"✅ Conectado a MySQL (intento {intento})")
+            return conn
+        except pymysql.MySQLError as e:
+            if intento < reintentos:
+                print(f"⚠️ Error conectando MySQL (intento {intento}/{reintentos}): {e}")
+                print(f"   Esperando {espera}s...")
+                time.sleep(espera)
+            else:
+                print(f"❌ No se pudo conectar a MySQL después de {reintentos} intentos")
+                raise
 
 
 def cargar_ventas_mysql(conn_mysql):
@@ -247,21 +274,37 @@ def guardar_ventas_unificadas(conn_pg, filas):
         execute_values(cursor, sentencia, filas)
 
     conn_pg.commit()
-    print(f"Filas unificadas cargadas: {len(filas)}")
+    print(f"\n✅ {len(filas)} filas unificadas cargadas exitosamente en gerencial.ventaunificada")
 
 
 def ejecutar_etl():
+    print("=" * 60)
+    print("INICIANDO ETL DE UNIFICACIÓN DE VENTAS")
+    print("=" * 60)
+    
+    # Esperar a que las BDs estén 100% listas (aún después del health check)
+    print("\n⏳ Esperando 15 segundos para que las bases estén 100% listas...")
+    time.sleep(15)
+    
     conn_mysql = None
     conn_pg = None
     try:
-        conn_mysql = obtener_conexion_mysql()
-        conn_pg = obtener_conexion_postgres()
+        print("\n📡 Intentando conectar a las bases de datos...")
+        conn_mysql = obtener_conexion_mysql(reintentos=10, espera=2)
+        conn_pg = obtener_conexion_postgres(reintentos=10, espera=2)
+        print("✅ Conexiones establecidas exitosamente\n")
 
         filas_mysql = cargar_ventas_mysql(conn_mysql)
-        print(f"Ventas leidas desde MySQL: {len(filas_mysql)}")
+        print(f"✅ Ventas leidas desde MySQL: {len(filas_mysql)}")
 
         filas_unificadas = construir_ventas_unificadas(filas_mysql, conn_pg)
         guardar_ventas_unificadas(conn_pg, filas_unificadas)
+        print("\n" + "=" * 60)
+        print("✅ ETL COMPLETADO EXITOSAMENTE")
+        print("=" * 60)
+    except Exception as e:
+        print(f"\n❌ ERROR EN ETL: {e}")
+        raise
     finally:
         if conn_mysql:
             conn_mysql.close()
