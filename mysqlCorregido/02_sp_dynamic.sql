@@ -45,10 +45,9 @@ BEGIN
         ('PEN', 'Sol peruano',          'S/'),
         ('CRC', 'Colon costarricense',  '₡'),
         ('MXN', 'Peso mexicano',        '$')
-    AS nuevo
     ON DUPLICATE KEY UPDATE
-        nombremoneda = nuevo.nombremoneda,
-        simbolo      = nuevo.simbolo,
+        nombremoneda = VALUES(nombremoneda),
+        simbolo      = VALUES(simbolo),
         activo       = 1;
 
     -- Idiomas
@@ -59,9 +58,8 @@ BEGIN
         ('es-PE', 'Español Peru'),
         ('es-CR', 'Español Costa Rica'),
         ('es-MX', 'Español Mexico')
-    AS nuevo
     ON DUPLICATE KEY UPDATE
-        nombreidioma = nuevo.nombreidioma,
+        nombreidioma = VALUES(nombreidioma),
         activo       = 1;
 
     -- Paises: FK a moneda en lugar de columnas de texto
@@ -75,10 +73,9 @@ BEGIN
         SELECT 'MX',                  'Mexico',                     'MXN'
     ) datos
     INNER JOIN moneda m ON m.codigoisomoneda = datos.codigoiso
-    AS nuevo(codigopaisiso, nombrepais, idmoneda)
     ON DUPLICATE KEY UPDATE
-        nombrepais = nuevo.nombrepais,
-        idmoneda   = nuevo.idmoneda,
+        nombrepais = VALUES(nombrepais),
+        idmoneda   = VALUES(idmoneda),
         activo     = 1;
 
     CALL sp_registrarlogcarga('dynamicbrands', 'moneda,pais,idioma', 'carga catalogos base', 'ok', ROW_COUNT(), 'catalogos base cargados correctamente');
@@ -110,9 +107,8 @@ BEGIN
         ('auraviva',   'activa'),
         ('nativaflux', 'activa'),
         ('dermaterra', 'activa')
-    AS nuevo
     ON DUPLICATE KEY UPDATE
-        estado = nuevo.estado;
+        estado = VALUES(estado);
 
     -- Niveles de servicio courier
     INSERT INTO nivelserviciocourier(nombrenivelservicio, descripcion)
@@ -120,9 +116,8 @@ BEGIN
         ('estandar', 'Entrega en 5 a 7 dias habiles'),
         ('premium',  'Entrega en 2 a 3 dias habiles'),
         ('express',  'Entrega en 24 horas')
-    AS nuevo
     ON DUPLICATE KEY UPDATE
-        descripcion = nuevo.descripcion,
+        descripcion = VALUES(descripcion),
         activo      = 1;
 
     -- Sitios web: idmoneda e ididioma por FK, urllogo y urlbrand como columnas
@@ -153,17 +148,16 @@ BEGIN
     INNER JOIN marcaia m ON m.nombremarca = datos.marca
     INNER JOIN pais    p ON p.codigopaisiso = datos.pais
     INNER JOIN idioma  i ON i.codigoidioma = CONCAT('es-', datos.pais)
-    AS nuevo(codigositio, idmarcaia, idpais, idmoneda, ididioma, dominioweb, urllogo, urlbrand, configjson, estado, fechainicio)
     ON DUPLICATE KEY UPDATE
-        idmarcaia   = nuevo.idmarcaia,
-        idpais      = nuevo.idpais,
-        idmoneda    = nuevo.idmoneda,
-        ididioma    = nuevo.ididioma,
-        urllogo     = nuevo.urllogo,
-        urlbrand    = nuevo.urlbrand,
-        configjson  = nuevo.configjson,
-        estado      = nuevo.estado,
-        fechainicio = nuevo.fechainicio;
+        idmarcaia   = VALUES(idmarcaia),
+        idpais      = VALUES(idpais),
+        idmoneda    = VALUES(idmoneda),
+        ididioma    = VALUES(ididioma),
+        urllogo     = VALUES(urllogo),
+        urlbrand    = VALUES(urlbrand),
+        configjson  = VALUES(configjson),
+        estado      = VALUES(estado),
+        fechainicio = VALUES(fechainicio);
 
     CALL sp_registrarlogcarga('dynamicbrands', 'marcaia,sitioweb', 'carga marcas y sitios', 'ok', ROW_COUNT(), 'marcas y sitios cargados');
     COMMIT;
@@ -192,9 +186,8 @@ BEGIN
         ('despachada',  'Orden enviada al courier'),
         ('entregada',   'Orden recibida por el cliente'),
         ('cancelada',   'Orden cancelada')
-    AS nuevo
     ON DUPLICATE KEY UPDATE
-        descripcion = nuevo.descripcion,
+        descripcion = VALUES(descripcion),
         activo      = 1;
 
     INSERT INTO estadodespacho(codigo, descripcion)
@@ -204,18 +197,16 @@ BEGIN
         ('entransito', 'En transito hacia destino'),
         ('entregado',  'Entregado al destinatario'),
         ('incidencia', 'Incidencia reportada')
-    AS nuevo
     ON DUPLICATE KEY UPDATE
-        descripcion = nuevo.descripcion,
+        descripcion = VALUES(descripcion),
         activo      = 1;
 
     INSERT INTO tipocostoorden(nombrecosto, descripcion)
     VALUES
         ('shipping',          'Costo de envio internacional'),
         ('permisosanitario',  'Permiso sanitario por pais')
-    AS nuevo
     ON DUPLICATE KEY UPDATE
-        descripcion = nuevo.descripcion,
+        descripcion = VALUES(descripcion),
         activo      = 1;
 
     -- Impuestos por pais
@@ -229,9 +220,8 @@ BEGIN
         SELECT 'MX',         'IVA',                   0.1600
     ) datos
     INNER JOIN pais p ON p.codigopaisiso = datos.pais
-    AS nuevo(idpais, nombreimpuesto, porcentaje)
     ON DUPLICATE KEY UPDATE
-        porcentaje = nuevo.porcentaje,
+        porcentaje = VALUES(porcentaje),
         activo     = 1;
 
     CALL sp_registrarlogcarga('dynamicbrands', 'estadoorden,estadodespacho,tipocostoorden,tipoimpuesto', 'carga catalogos operacion', 'ok', ROW_COUNT(), 'catalogos operacion cargados correctamente');
@@ -303,10 +293,9 @@ BEGIN
     ) datos
     INNER JOIN pais                p ON p.codigopaisiso        = datos.pais
     INNER JOIN nivelserviciocourier n ON n.nombrenivelservicio = datos.nivel
-    AS nuevo(nombrecourier, idpais, idnivelservicio)
     ON DUPLICATE KEY UPDATE
-        idpais          = nuevo.idpais,
-        idnivelservicio = nuevo.idnivelservicio,
+        idpais          = VALUES(idpais),
+        idnivelservicio = VALUES(idnivelservicio),
         activo          = 1;
 
     -- IDs de catalogos reutilizados en el loop
@@ -334,10 +323,9 @@ BEGIN
             CONCAT('cliente', LPAD(i, 4, '0'), '@correo.demo'),
             CONCAT('+50', i)
         )
-        AS nuevo
         ON DUPLICATE KEY UPDATE
-            nombrecompleto = nuevo.nombrecompleto,
-            telefono       = nuevo.telefono;
+            nombrecompleto = VALUES(nombrecompleto),
+            telefono       = VALUES(telefono);
 
         SELECT idclientefinal INTO vcliente
         FROM clientefinal
@@ -355,10 +343,9 @@ BEGIN
             'provincia demo',
             1
         )
-        AS nuevo
         ON DUPLICATE KEY UPDATE
-            lineadireccion1 = nuevo.lineadireccion1,
-            ciudad          = nuevo.ciudad;
+            lineadireccion1 = VALUES(lineadireccion1),
+            ciudad          = VALUES(ciudad);
 
         SELECT iddireccioncliente INTO vdireccion
         FROM direccioncliente
@@ -375,16 +362,14 @@ BEGIN
         -- Producto base en el sitio
         INSERT INTO producto(nombreproducto, descripcion)
         VALUES (CONCAT('producto base ', ((i - 1) MOD 10) + 1), 'producto generado para demo')
-        AS nuevo
-        ON DUPLICATE KEY UPDATE descripcion = nuevo.descripcion;
+        ON DUPLICATE KEY UPDATE descripcion = VALUES(descripcion);
 
         INSERT INTO productositio(idproducto, idsitioweb, idmarcaia, nombrecomercial)
         SELECT p.idproducto, vsitio, s.idmarcaia, CONCAT('producto marca ', i)
         FROM producto p, sitioweb s
         WHERE p.nombreproducto = CONCAT('producto base ', ((i - 1) MOD 10) + 1)
           AND s.idsitioweb = vsitio
-        AS nuevo
-        ON DUPLICATE KEY UPDATE nombrecomercial = nuevo.nombrecomercial;
+        ON DUPLICATE KEY UPDATE nombrecomercial = VALUES(nombrecomercial);
 
         SELECT ps.idproductositio INTO vproductositio1
         FROM productositio ps
@@ -395,8 +380,7 @@ BEGIN
 
         INSERT INTO preciohistoricoproducto(idproductositio, idmoneda, precio, fechadesde)
         VALUES (vproductositio1, vidmoneda, vprecio, CURRENT_DATE)
-        AS nuevo
-        ON DUPLICATE KEY UPDATE precio = nuevo.precio;
+        ON DUPLICATE KEY UPDATE precio = VALUES(precio);
 
         SELECT idpreciohistorico INTO vprecio1
         FROM preciohistoricoproducto
@@ -432,14 +416,13 @@ BEGIN
             ROUND(vbruto + vimpuesto + vcostoshipping + vcostopermiso, 4),
             CONCAT('orden demo para sitio ', vcodigositio)
         )
-        AS nuevo
         ON DUPLICATE KEY UPDATE
-            idestadoorden = nuevo.idestadoorden,
-            totalbruto    = nuevo.totalbruto,
-            totalimpuesto = nuevo.totalimpuesto,
-            totalcostos   = nuevo.totalcostos,
-            totalneto     = nuevo.totalneto,
-            observaciones = nuevo.observaciones;
+            idestadoorden = VALUES(idestadoorden),
+            totalbruto    = VALUES(totalbruto),
+            totalimpuesto = VALUES(totalimpuesto),
+            totalcostos   = VALUES(totalcostos),
+            totalneto     = VALUES(totalneto),
+            observaciones = VALUES(observaciones);
 
         SELECT idordenventa INTO vorden
         FROM ordenventa
@@ -454,11 +437,10 @@ BEGIN
         -- Detalle de orden con FKs a productositio y preciohistorico
         INSERT INTO ordenventadetalle(idordenventa, idproductositio, idpreciohistorico, cantidad, preciounitariolocal, subtotal)
         VALUES (vorden, vproductositio1, vprecio1, vcantidad, vprecio, ROUND(vcantidad * vprecio, 4))
-        AS nuevo
         ON DUPLICATE KEY UPDATE
-            cantidad            = nuevo.cantidad,
-            preciounitariolocal = nuevo.preciounitariolocal,
-            subtotal            = nuevo.subtotal;
+            cantidad            = VALUES(cantidad),
+            preciounitariolocal = VALUES(preciounitariolocal),
+            subtotal            = VALUES(subtotal);
 
         -- Courier del pais del sitio
         SELECT c.idcourierexterno INTO vidcourier
@@ -475,9 +457,8 @@ BEGIN
             ROUND(4 + (i MOD 4), 4),
             vidmoneda
         )
-        AS nuevo
         ON DUPLICATE KEY UPDATE
-            costocourierlocal = nuevo.costocourierlocal;
+            costocourierlocal = VALUES(costocourierlocal);
 
         SELECT iddespacho INTO vdespacho
         FROM despacho

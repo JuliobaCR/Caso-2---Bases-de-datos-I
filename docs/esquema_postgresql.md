@@ -22,148 +22,248 @@
 
 ## Tablas operativas (schema etheria)
 
+### moneda
+- idmoneda PK: bigserial
+- codigoisomoneda UK: char(3) NOT NULL
+- nombremoneda UK: varchar(80) NOT NULL
+- simbolo: varchar(10) NOT NULL
+- activo: boolean NOT NULL, DEFAULT true
+- fechacreacion: timestamp NOT NULL, DEFAULT now()
+- fechamodificacion: timestamp NULL
+
 ### pais
 - idpais PK: bigserial
 - codigopaisiso UK: char(2) NOT NULL
 - nombrepais UK: varchar(80) NOT NULL
-- codigomoneda: char(3) NOT NULL
-- monedaoficial: varchar(50) NOT NULL
+- idmoneda FK(moneda): bigint NOT NULL
 - activo: boolean NOT NULL, DEFAULT true
 - fechacreacion: timestamp NOT NULL, DEFAULT now()
+- fechamodificacion: timestamp NULL
 
 ### categoria
 - idcategoria PK: bigserial
 - nombrecategoria UK: varchar(80) NOT NULL
-- descripcion: text
+- descripcion: varchar(500)
+- activo: boolean NOT NULL, DEFAULT true
 - fechacreacion: timestamp NOT NULL, DEFAULT now()
+- fechamodificacion: timestamp NULL
 
 ### proveedor
 - idproveedor PK: bigserial
 - nombreproveedor UK: varchar(120) NOT NULL
-- paisorigen UK: varchar(80) NOT NULL
+- idpais FK(pais): bigint NOT NULL
 - correocontacto: varchar(120)
 - telefonocontacto: varchar(30)
 - activo: boolean NOT NULL, DEFAULT true
 - fechacreacion: timestamp NOT NULL, DEFAULT now()
+- fechamodificacion: timestamp NULL
 
+//Normalizar los tipos de uso
+### tipousoproducto
+- idtipousobase PK: bigserial
+- nombretipousobase UK: varchar(80) NOT NULL  -- ingesta, piel, capilar, aromaterapia, mixto
+- descripcion: varchar(220)
+- activo: boolean NOT NULL, DEFAULT true
+- fechacreacion: timestamp NOT NULL, DEFAULT now()
+- fechamodificacion: timestamp NULL
+
+//Tabla para atributos variables (ingredientes, beneficios, ...)
+### tipoatributoproducto
+- idtipoatributo PK: bigserial
+- nombreatributo UK: varchar(80) NOT NULL  -- ingrediente, beneficio, contraindicacion
+- unidadmedida: varchar(20)  -- NULL si no aplica
+- activo: boolean NOT NULL, DEFAULT true
+- fechacreacion: timestamp NOT NULL, DEFAULT now()
+- fechamodificacion: timestamp NULL
+
+//Se normalizan los atributos y los tipos de uso
 ### productobase
 - idproductobase PK: bigserial
 - codigoproducto UK: varchar(20) NOT NULL
 - nombreproducto: varchar(160) NOT NULL
 - idcategoria FK(categoria): bigint NOT NULL
-- tipouso: varchar(30) NOT NULL, CHECK (tipouso IN ('ingesta', 'piel', 'capilar', 'aromaterapia', 'mixto'))
+- idtipousobase FK(tipousoproducto): bigint NOT NULL
 - unidadmedida: varchar(20) NOT NULL
-- ingredientebase: varchar(200)
-- beneficiosalud: varchar(500)
 - activo: boolean NOT NULL, DEFAULT true
 - fechacreacion: timestamp NOT NULL, DEFAULT now()
+- fechamodificacion: timestamp NULL
 
-### productopais
-- idproductopais PK: bigserial
-- idproductobase UK, FK(productobase): bigint NOT NULL
-- idpaisdestino UK, FK(pais): bigint NOT NULL
-- codigosanitario: varchar(60)
+### atributoproductobase
+- idatributoproductobase PK: bigserial
+- idproductobase FK(productobase): bigint NOT NULL
+- idtipoatributo FK(tipoatributoproducto): bigint NOT NULL
+- valor: varchar(220) NOT NULL  -- "Aloe Vera", "Hidratacion profunda", etc.
+- UK(idproductobase, idtipoatributo)
+- fechacreacion: timestamp NOT NULL, DEFAULT now()
+- fechamodificacion: timestamp NULL
+
+//Codigos sanitarios normalizados para las configuraciones de profuctos por categoria
+### codigosanitario (nueva)
+- idcodigosanitario PK: bigserial
+- idpais FK(pais): bigint NOT NULL
+- codigo UK: varchar(60) NOT NULL
+- entidademisora: varchar(120) NOT NULL  -- MINSA, COFEPRIS, INVIMA, etc.
+- urldocumento: varchar(500)
+- fechaemision: date
+- fechavencimiento: date
+- activo: boolean NOT NULL, DEFAULT true
+- fechacreacion: timestamp NOT NULL, DEFAULT now()
+- fechamodificacion: timestamp NULL
+
+//Hace la regulacion por categoria de productos en cada pais
+### configuracionregulatoriacategoria (reemplaza productopais)
+- idconfigregulatoria PK: bigserial
+- idcategoria FK(categoria): bigint NOT NULL
+- idpais FK(pais): bigint NOT NULL
+- idcodigosanitario FK(codigosanitario): bigint
 - requierepermiso: boolean NOT NULL, DEFAULT true
-- restricciones: text
 - fechavigencia: date NOT NULL, DEFAULT current_date
 - activo: boolean NOT NULL, DEFAULT true
+- UK(idcategoria, idpais)
+- fechacreacion: timestamp NOT NULL, DEFAULT now()
+- fechamodificacion: timestamp NULL
 
 ### requisitolegal
 - idrequisitolegal PK: bigserial
-- nombrerequisito UK: varchar(120) NOT NULL
-- entidadreguladora UK: varchar(120) NOT NULL
-- descripcion: text
+- idpais FK(pais): bigint NOT NULL
+- nombrerequisito: varchar(120) NOT NULL
+- entidadreguladora: varchar(120) NOT NULL
+- urldocumento: varchar(500)
 - obligatorio: boolean NOT NULL, DEFAULT true
+- UK(idpais, nombrerequisito)
+- activo: boolean NOT NULL, DEFAULT true
+- fechacreacion: timestamp NOT NULL, DEFAULT now()
+- fechamodificacion: timestamp NULL
+
+//Maneja los requisitos legales necesarios por configuracion
+### requisitosporconfiguracion
+- idconfigrequisito PK: bigserial
+- idconfigregulatoria FK(configuracionregulatoriacategoria): bigint NOT NULL
+- idrequisitolegal FK(requisitolegal): bigint NOT NULL
+- UK(idconfigregulatoria, idrequisitolegal)
 - fechacreacion: timestamp NOT NULL, DEFAULT now()
 
-### requisitoproductopais
-- idrequisitopp PK: bigserial
-- idproductopais UK, FK(productopais.): bigint NOT NULL
-- idrequisitolegal UK, FK(requisitolegal): bigint NOT NULL
-- detalleaplicacion: text
+//Normaliza los estados de una importacion
+### estadoimportacion
+- idestadoimportacion PK: bigserial
+- codigo UK: varchar(20) NOT NULL  -- pedido, transito, recibido, cerrado
+- descripcion: varchar(120) NOT NULL
+- activo: boolean NOT NULL, DEFAULT true
 - fechacreacion: timestamp NOT NULL, DEFAULT now()
+- fechamodificacion: timestamp NULL
+
+//Normaliza los codigos aduanales por pais
+### codigoaduanal
+- idcodigoaduanal PK: bigserial
+- idpais FK(pais): bigint NOT NULL
+- idcategoria FK(categoria): bigint NOT NULL
+- codigo UK: varchar(30) NOT NULL  -- codigo arancelario HS
+- descripcion: varchar(220) NOT NULL
+- activo: boolean NOT NULL, DEFAULT true
+- UK(idpais, idcategoria)
+- fechacreacion: timestamp NOT NULL, DEFAULT now()
+- fechamodificacion: timestamp NULL
 
 ### importacion
 - idimportacion PK: bigserial
-- codigoimportacion UK: varchar(30) NOT NULL
 - idproveedor FK(proveedor): bigint NOT NULL
-- estadoimportacion: varchar(20) NOT NULL, CHECK (estadoimportacion IN ('pedido', 'transito', 'recibido', 'cerrado'))
+- idestadoimportacion FK(estadoimportacion): bigint NOT NULL
+- idcodigoaduanal FK(codigoaduanal): bigint NOT NULL
 - fechapedido: date NOT NULL
 - fechallegadacaribe: date
-- observaciones: text
+- observaciones: varchar(500)
 - fechacreacion: timestamp NOT NULL, DEFAULT now()
+- fechamodificacion: timestamp NULL
 
-### importaciondetalle
-- idimportaciondetalle PK: bigserial
-- idimportacion UK, FK(importacion): bigint NOT NULL
-- idproductobase UK, FK(productobase): bigint NOT NULL
-- cantidadbulk: numeric(14,2) NOT NULL, CHECK (cantidadbulk > 0)
-- costounitariousd: numeric(14,4) NOT NULL, CHECK (costounitariousd > 0)
-- subtotalusd: numeric(16,4) GENERATED ALWAYS AS (cantidadbulk * costounitariousd) STORED
+//Maneja tasas de cambio entre 2 monedas
+### tipocambio
+- idtipocambio PK: bigserial
+- idmonedabase FK(moneda): bigint NOT NULL      -- moneda origen, ej: USD
+- idmonedadestino FK(moneda): bigint NOT NULL   -- moneda destino, ej: CRC
+- tasa: numeric(14,6) NOT NULL, CHECK (tasa > 0)
+- fuente: varchar(80) NOT NULL
+- fechadesde: date NOT NULL
+- fechahasta: date                              -- NULL significa tasa vigente
+- UK(idmonedabase, idmonedadestino, fechadesde)
 - fechacreacion: timestamp NOT NULL, DEFAULT now()
 
 ### loteinventario
 - idloteinventario PK: bigserial
 - codigolote UK: varchar(40) NOT NULL
-- idimportaciondetalle FK(importaciondetalle): bigint NOT NULL
+- idproductobase FK(productobase): bigint NOT NULL
 - cantidadinicial: numeric(14,2) NOT NULL, CHECK (cantidadinicial > 0)
-- cantidaddisponible: numeric(14,2) NOT NULL, CHECK (cantidaddisponible >= 0)
 - fechavencimiento: date
-- estado: varchar(20) NOT NULL, CHECK (estado IN ('disponible', 'reservado', 'agotado', 'vencido'))
 - fechacreacion: timestamp NOT NULL, DEFAULT now()
+
+//Tabla con los tipos de movimientos de un lote.
+### tipomovimientoinventario
+- idtipomovimiento PK: bigserial
+- codigo UK: varchar(20) NOT NULL  -- entrada, salida, ajuste
+- descripcion: varchar(120) NOT NULL
+- activo: boolean NOT NULL, DEFAULT true
+- fechacreacion: timestamp NOT NULL, DEFAULT now()
+- fechamodificacion: timestamp NULL
+
+//Se deja de depender del usd, se calcula el total del origen y del destino.
+### importaciondetalle
+- idimportaciondetalle PK: bigserial
+- idimportacion UK(idimportacion, idloteinventario), FK(importacion): bigint NOT NULL
+- idloteinventario UK(idimportacion, idloteinventario), FK(loteinventario): bigint NOT NULL
+- idtipocambio FK(tipocambio): bigint NOT NULL  -- contiene par de monedas y tasa del momento
+- tasacambio: numeric(14,6) NOT NULL            -- tasa guardada en el momento de la transaccion
+- costounitariobase: numeric(14,4) NOT NULL, CHECK (costounitariobase > 0)
+- subtotalbase: numeric(16,4) NOT NULL
+- costounitariolocal: numeric(14,4) NOT NULL
+- subtotallocal: numeric(16,4) NOT NULL
+- fechacreacion: timestamp NOT NULL, DEFAULT now()
+- fechamodificacion: timestamp NULL
 
 ### movimientosinventario
 - idmovimiento PK: bigserial
 - idloteinventario FK(loteinventario): bigint NOT NULL
-- tipomovimiento: varchar(20) NOT NULL, CHECK (tipomovimiento IN ('entrada', 'salida', 'ajuste'))
+- idtipomovimiento FK(tipomovimientoinventario): bigint NOT NULL
 - origenmovimiento: varchar(30) NOT NULL
 - cantidad: numeric(14,2) NOT NULL, CHECK (cantidad > 0)
 - referenciaexterna: varchar(80)
-- observacion: text
+- observacion: varchar(500)
 - fechamovimiento: timestamp NOT NULL, DEFAULT now()
+- fechacreacion: timestamp NOT NULL, DEFAULT now()
+
+//Tabla con tipos de costo en la importacion con fechas de vigencia
+### tipocostoimportacion (corregida)
+- idtipocosto PK: bigserial
+- nombrecosto: varchar(80) NOT NULL  -- flete, seguro, arancel, agenciaaduanal, almacenaje, otro
+- UK(nombrecosto, fechadesde)
+- descripcion: varchar(220)
+- esporcentaje: boolean NOT NULL, DEFAULT false  -- true = %, false = flat
+- valor: numeric(14,4) NOT NULL, CHECK (valor >= 0)  -- monto flat o porcentaje segun esporcentaje
+- fechadesde: date NOT NULL
+- fechahasta: date                              -- NULL significa vigente
+- activo: boolean NOT NULL, DEFAULT true
+- fechacreacion: timestamp NOT NULL, DEFAULT now()
+- fechamodificacion: timestamp NULL
 
 ### costosimportacion
 - idcostoimportacion PK: bigserial
 - idimportacion FK(importacion): bigint NOT NULL
-- tipocosto: varchar(30) NOT NULL, CHECK (tipocosto IN ('flete', 'seguro', 'arancel', 'agenciaaduanal', 'almacenaje', 'otro'))
-- montousd: numeric(14,4) NOT NULL, CHECK (montousd >= 0)
-- descripcion: text
-- fecharegistro: timestamp NOT NULL, DEFAULT now()
+- idtipocosto FK(tipocostoimportacion): bigint NOT NULL
+- idtipocambio FK(tipocambio): bigint NOT NULL
+- tasacambio: numeric(14,6) NOT NULL
+- valorlocal: numeric(14,4) NOT NULL  -- valor convertido a moneda local en el momento
+- fechacreacion: timestamp NOT NULL, DEFAULT now()
 
-### ordenabastecimiento
-- idordenabastecimiento PK: bigserial
-- codigoorden UK: varchar(40) NOT NULL
-- idpaisdestino FK(pais): bigint NOT NULL
-- nombresitioexterno: varchar(120) NOT NULL
-- idmarcaexterna: bigint NOT NULL
-- estadoorden: varchar(20) NOT NULL, CHECK (estadoorden IN ('creada', 'preparacion', 'despachada', 'cerrada', 'cancelada'))
-- fechaorden: timestamp NOT NULL, DEFAULT now()
-- observaciones: text
-
-### ordenabastecimientodetalle
-- idordenabdetalle PK: bigserial
-- idordenabastecimiento UK, FK(ordenabastecimiento): bigint NOT NULL
-- idproductobase UK, FK(productobase): bigint NOT NULL
-- cantidadsolicitada: numeric(14,2) NOT NULL, CHECK (cantidadsolicitada > 0)
-- cantidadasignada: numeric(14,2) NOT NULL, DEFAULT 0, CHECK (cantidadasignada >= 0)
-- preciosalidamonedalocal: numeric(14,4) NOT NULL, DEFAULT 0
-
+//Asociada con importacion (funciona como orden)
 ### etiquetadomarca
 - idetiquetadomarca PK: bigserial
-- idordenabdetalle FK(ordenabastecimientodetalle): bigint NOT NULL
+- idimportacion FK(importacion): bigint NOT NULL
+- idproductobase FK(productobase): bigint NOT NULL
 - codigobarrainterno UK: varchar(40) NOT NULL
 - marcaprint: varchar(100) NOT NULL
 - enfoquepublicitario: varchar(120)
-- fecharegistro: timestamp NOT NULL, DEFAULT now()
-
-### tipocambio
-- idtipocambio PK: bigserial
-- idpais UK, FK(pais): bigint NOT NULL
-- fechatasa UK: date NOT NULL
-- tasausdmonedalocal: numeric(14,6) NOT NULL, CHECK (tasausdmonedalocal > 0)
-- fuente: varchar(80) NOT NULL
 - fechacreacion: timestamp NOT NULL, DEFAULT now()
+- fechamodificacion: timestamp NULL
 
+//Patron de logs
 ### logcargaproceso
 - idlogcargaproceso PK: bigserial
 - modulo: varchar(50) NOT NULL
@@ -171,16 +271,29 @@
 - paso: varchar(120) NOT NULL
 - estado: varchar(20) NOT NULL, CHECK (estado IN ('iniciado', 'ok', 'error'))
 - filasafectadas: integer
-- mensaje: text
+- duracionms: integer  -- duracion del paso en milisegundos
+- idreferencia: bigint  -- ID del registro afectado, nullable
+- mensaje: varchar(500)
 - fecharegistro: timestamp NOT NULL, DEFAULT now()
 
 #### Índices
 - ix_productobase_categoria → productobase(idcategoria)
-- ix_productopais_pais → productopais(idpaisdestino)
-- ix_importacion_estado → importacion(estadoimportacion)
-- ix_loteinventario_estado → loteinventario(estado)
-- ix_tipocambio_fechatasa → tipocambio(fechatasa)
+- ix_productobase_tipousobase → productobase(idtipousobase)
+- ix_proveedor_pais → proveedor(idpais)
+- ix_importacion_proveedor → importacion(idproveedor)
+- ix_importacion_estado → importacion(idestadoimportacion)
+- ix_importacion_codigoaduanal → importacion(idcodigoaduanal)
+- ix_importaciondetalle_lote → importaciondetalle(idloteinventario)
+- ix_loteinventario_producto → loteinventario(idproductobase)
+- ix_loteinventario_vencimiento → loteinventario(fechavencimiento)
+- ix_movimientos_lote → movimientosinventario(idloteinventario)
+- ix_movimientos_fecha → movimientosinventario(fechamovimiento)
+- ix_tipocambio_monedas → tipocambio(idmonedabase, idmonedadestino)
+- ix_tipocambio_vigente → tipocambio(idmonedabase, idmonedadestino, fechahasta)
+- ix_configregulatoria_pais → configuracionregulatoriacategoria(idpais)
+- ix_requisitolegal_pais → requisitolegal(idpais)
 - ix_logcargaproceso_fecha → logcargaproceso(fecharegistro)
+- ix_logcargaproceso_modulo → logcargaproceso(modulo)
 
 ## Tablas analiticas (schema gerencial)
 
@@ -193,8 +306,9 @@
 - idsitioweb: bigint NOT NULL
 - codigositio: varchar(40) NOT NULL
 - nombremarca: varchar(120) NOT NULL
-- codigoordenventa UK: varchar(40) NOT NULL
-- codigoproducto UK: varchar(20) NOT NULL
+- codigoordenventa: varchar(40) NOT NULL
+- codigoproducto: varchar(20) NOT NULL
+- UK(codigoordenventa, codigoproducto)
 - nombreproducto: varchar(160) NOT NULL
 - nombrecategoria: varchar(80) NOT NULL
 - cantidad: numeric(14,2) NOT NULL
@@ -214,7 +328,7 @@
 - margenporcentaje: numeric(8,2) NOT NULL
 
 #### Índices
-- ix_ventaunificada_fecha → fechaorden
-- ix_ventaunificada_categoria → nombrecategoria
-- ix_ventaunificada_pais → codigopaisiso
-- ix_ventaunificada_marca → nombremarca
+- ix_ventaunificada_fecha → ventaunificada(fechaorden)
+- ix_ventaunificada_categoria → ventaunificada(nombrecategoria)
+- ix_ventaunificada_pais → ventaunificada(codigopaisiso)
+- ix_ventaunificada_marca → ventaunificada(nombremarca)

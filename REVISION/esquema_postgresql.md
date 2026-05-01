@@ -123,24 +123,6 @@
 - descripcion: text
 - fecharegistro: timestamp NOT NULL, DEFAULT now()
 
-### ordenabastecimiento -- esto me parece que está sobrado, ya tenes el order lo que falta es pagarla y hacer la transaccion de plata y que esto llegue y se guarde en una ubicacion de bodega en el hub y listo. 
-- idordenabastecimiento PK: bigserial
-- codigoorden UK: varchar(40) NOT NULL
-- idpaisdestino FK(pais): bigint NOT NULL
-- nombresitioexterno: varchar(120) NOT NULL  -- esto no tiene que estar aqui, mas bien lo que te falta es enviar por courier que usas las mismas tablas de arriba solo encargate que sean envios no importa de donde vienen o donde van, esa data siempre esta solo cambias el tipo de envio. 
-- idmarcaexterna: bigint NOT NULL
-- estadoorden: varchar(20) NOT NULL, CHECK (estadoorden IN ('creada', 'preparacion', 'despachada', 'cerrada', 'cancelada'))
-- fechaorden: timestamp NOT NULL, DEFAULT now()
-- observaciones: text
-
-### ordenabastecimientodetalle
-- idordenabdetalle PK: bigserial
-- idordenabastecimiento UK, FK(ordenabastecimiento): bigint NOT NULL
-- idproductobase UK, FK(productobase): bigint NOT NULL
-- cantidadsolicitada: numeric(14,2) NOT NULL, CHECK (cantidadsolicitada > 0)
-- cantidadasignada: numeric(14,2) NOT NULL, DEFAULT 0, CHECK (cantidadasignada >= 0)
-- preciosalidamonedalocal: numeric(14,4) NOT NULL, DEFAULT 0
-
 ### etiquetadomarca, esto lo podes meter en la orden o asociarlo a la orden
 - idetiquetadomarca PK: bigserial
 - idordenabdetalle FK(ordenabastecimientodetalle): bigint NOT NULL

@@ -38,7 +38,7 @@
 - fechacreacion: timestamp NOT NULL, DEFAULT current_timestamp
 - fechamodificacion: timestamp NULL, ON UPDATE current_timestamp
 
-### marcaia (no entendi las correcciones del profe)
+### marcaia
 - idmarcaia PK: bigint AUTO_INCREMENT
 - nombremarca UK: varchar(120) NOT NULL
 - estado: varchar(20) NOT NULL, CHECK (estado IN ('activa', 'inactiva'))
