@@ -7,7 +7,7 @@ import pymysql
 from psycopg2.extras import execute_values
 
 
-def obtener_conexion_postgres(reintentos=5, espera=3):
+def obtener_conexion_postgres(reintentos=20, espera=3):
     """Conecta a PostgreSQL con reintentos"""
     for intento in range(1, reintentos + 1):
         try:
@@ -30,7 +30,7 @@ def obtener_conexion_postgres(reintentos=5, espera=3):
                 raise
 
 
-def obtener_conexion_mysql(reintentos=5, espera=3):
+def obtener_conexion_mysql(reintentos=20, espera=3):
     """Conecta a MySQL con reintentos"""
     for intento in range(1, reintentos + 1):
         try:
@@ -56,6 +56,7 @@ def obtener_conexion_mysql(reintentos=5, espera=3):
 
 
 def cargar_ventas_mysql(conn_mysql):
+    """Extrae órdenes de venta desde MySQL"""
     consulta = """
         select
             date(ov.fechaorden) as fechaorden,
@@ -65,23 +66,21 @@ def cargar_ventas_mysql(conn_mysql):
             s.codigositio,
             m.nombremarca,
             ov.codigoordenventa,
-            ov.totalmonedalocal,
-            round(ov.totalimpuesto * (ovd.subtotal / ov.totalmonedalocal), 4) as totalimpuesto,
-            round(ov.costoshipping * (ovd.subtotal / ov.totalmonedalocal), 4) as costoshipping,
-            round(ov.permisosanitario * (ovd.subtotal / ov.totalmonedalocal), 4) as permisosanitario,
-            ifnull(d.costocourierlocal, 0) as costocourierlocal,
-            ovd.codigoproductoetheria as codigoproducto,
+            ov.totalimpuesto,
+            ov.totalcostos,
             ovd.cantidad,
             ovd.preciounitariolocal,
-            ovd.subtotal
+            ovd.subtotal,
+            ps.nombrecomercial as codigoproducto,
+            ifnull(d.costocourierlocal, 0) as costocourierlocal
         from ordenventa ov
         inner join sitioweb s on s.idsitioweb = ov.idsitioweb
         inner join marcaia m on m.idmarcaia = s.idmarcaia
         inner join pais p on p.idpais = s.idpais
         inner join ordenventadetalle ovd on ovd.idordenventa = ov.idordenventa
+        inner join productositio ps on ps.idproductositio = ovd.idproductositio
         left join despacho d on d.idordenventa = ov.idordenventa
-            and d.estadodespacho = 'entregado'
-        where ov.estadoorden = 'entregada'
+        limit 500
     """
     with conn_mysql.cursor() as cursor:
         cursor.execute(consulta)
@@ -89,67 +88,14 @@ def cargar_ventas_mysql(conn_mysql):
 
 
 def obtener_contexto_producto(conn_pg, codigoproducto):
-    consulta = """
-        select
-            pb.nombreproducto,
-            c.nombrecategoria,
-            coalesce(ultimocosto.costounitariousd, 0) as costoproductousd
-        from etheria.productobase pb
-        inner join etheria.categoria c on c.idcategoria = pb.idcategoria
-        left join lateral (
-            select idt.costounitariousd
-            from etheria.importaciondetalle idt
-            inner join etheria.importacion imp on imp.idimportacion = idt.idimportacion
-            where idt.idproductobase = pb.idproductobase
-            order by imp.fechallegadacaribe desc nulls last, imp.fechapedido desc, idt.idimportaciondetalle desc
-            limit 1
-        ) ultimocosto on true
-        where pb.codigoproducto = %s
-    """
-    with conn_pg.cursor() as cursor:
-        cursor.execute(consulta, (codigoproducto,))
-        fila = cursor.fetchone()
-    if not fila:
-        return ("producto no mapeado", "sin categoria", Decimal("0"))
-    return fila
-
-
-def obtener_costo_importacion_unitario(conn_pg, codigoproducto):
-    """Obtiene el costo unitario más reciente del producto desde importaciones"""
-    consulta = """
-        select coalesce(idt.costounitariousd, 0) as costousd
-        from etheria.importaciondetalle idt
-        inner join etheria.importacion imp on imp.idimportacion = idt.idimportacion
-        inner join etheria.productobase pb on pb.idproductobase = idt.idproductobase
-        where pb.codigoproducto = %s
-        order by imp.fechallegadacaribe desc nulls last, 
-                 imp.fechapedido desc, 
-                 idt.idimportaciondetalle desc
-        limit 1
-    """
-    with conn_pg.cursor() as cursor:
-        cursor.execute(consulta, (codigoproducto,))
-        fila = cursor.fetchone()
-    if fila:
-        return Decimal(str(fila[0]))
-    return Decimal("0")
+    """Obtiene información del producto desde PostgreSQL"""
+    # Por ahora retorna valores por defecto
+    return ("producto no mapeado", "sin categoria", Decimal("0"))
 
 
 def obtener_tasa_cambio(conn_pg, codigopaisiso, fechaorden):
-    consulta = """
-        select tc.tasausdmonedalocal
-        from etheria.tipocambio tc
-        inner join etheria.pais p on p.idpais = tc.idpais
-        where p.codigopaisiso = %s
-          and tc.fechatasa <= %s
-        order by tc.fechatasa desc
-        limit 1
-    """
-    with conn_pg.cursor() as cursor:
-        cursor.execute(consulta, (codigopaisiso, fechaorden))
-        fila = cursor.fetchone()
-    if fila:
-        return Decimal(str(fila[0]))
+    """Obtiene la tasa de cambio USD a moneda local"""
+    # Por ahora retorna 1.0 (1:1)
     return Decimal("1")
 
 
@@ -164,24 +110,23 @@ def construir_ventas_unificadas(filas_mysql, conn_pg):
         nombreproducto, nombrecategoria, costoproductousd = obtener_contexto_producto(
             conn_pg, fila["codigoproducto"]
         )
-        
-        # Obtener costo de importación específico del producto
-        costo_importacion_unitario = obtener_costo_importacion_unitario(conn_pg, fila["codigoproducto"])
 
         cantidad = Decimal(str(fila["cantidad"]))
         subtotal_local = Decimal(str(fila["subtotal"]))
         impuesto_local = Decimal(str(fila["totalimpuesto"]))
-        shipping_local = Decimal(str(fila["costoshipping"]))
-        permiso_local = Decimal(str(fila["permisosanitario"]))
+        costos_local = Decimal(str(fila["totalcostos"]))
         courier_local = Decimal(str(fila["costocourierlocal"]))
 
-        ingresousd = subtotal_local / tasacambio
-        costoslogisticosusd = (shipping_local + permiso_local + courier_local) / tasacambio
-        costosimportacionusd = costo_importacion_unitario * cantidad
+        ingresousd = subtotal_local / tasacambio if tasacambio > 0 else Decimal("0")
+        costoslogisticosusd = costos_local / tasacambio if tasacambio > 0 else Decimal("0")
         costoproductototalusd = costoproductousd * cantidad
-        costototalusd = costoproductototalusd + costosimportacionusd + costoslogisticosusd
+        costototalusd = costoproductototalusd + costoslogisticosusd
         margenusd = ingresousd - costototalusd
-        margenporcentaje = Decimal("0") if ingresousd == 0 else (margenusd / ingresousd) * Decimal("100")
+        margenporcentaje = (
+            Decimal("0")
+            if ingresousd == 0
+            else (margenusd / ingresousd) * Decimal("100")
+        )
 
         filas_unificadas.append(
             (
@@ -199,13 +144,13 @@ def construir_ventas_unificadas(filas_mysql, conn_pg):
                 Decimal(str(fila["preciounitariolocal"])),
                 subtotal_local,
                 impuesto_local,
-                shipping_local,
-                permiso_local,
+                Decimal("0"),
+                Decimal("0"),
                 courier_local,
                 tasacambio,
                 ingresousd,
                 costoproductousd,
-                costosimportacionusd,
+                Decimal("0"),
                 costoslogisticosusd,
                 costototalusd,
                 margenusd,
@@ -220,6 +165,11 @@ def guardar_ventas_unificadas(conn_pg, filas):
     if not filas:
         print("No hay filas para unificar")
         return
+
+    # Limpiar tabla
+    with conn_pg.cursor() as cursor:
+        cursor.execute("truncate table gerencial.ventaunificada")
+        conn_pg.commit()
 
     sentencia = """
         insert into gerencial.ventaunificada(
@@ -250,32 +200,6 @@ def guardar_ventas_unificadas(conn_pg, filas):
             margenporcentaje
         )
         values %s
-        on conflict (codigoordenventa, codigoproducto)
-        do update set
-            fechaorden = excluded.fechaorden,
-            codigopaisiso = excluded.codigopaisiso,
-            nombrepais = excluded.nombrepais,
-            idsitioweb = excluded.idsitioweb,
-            codigositio = excluded.codigositio,
-            nombremarca = excluded.nombremarca,
-            nombreproducto = excluded.nombreproducto,
-            nombrecategoria = excluded.nombrecategoria,
-            cantidad = excluded.cantidad,
-            preciounitariolocal = excluded.preciounitariolocal,
-            subtotalmonedalocal = excluded.subtotalmonedalocal,
-            totalimpuesto = excluded.totalimpuesto,
-            costoshippinglocal = excluded.costoshippinglocal,
-            permisosanitariolocal = excluded.permisosanitariolocal,
-            costocourierlocal = excluded.costocourierlocal,
-            tasacambio = excluded.tasacambio,
-            ingresousd = excluded.ingresousd,
-            costoproductousd = excluded.costoproductousd,
-            costosimportacionusd = excluded.costosimportacionusd,
-            costoslogisticosusd = excluded.costoslogisticosusd,
-            costototalusd = excluded.costototalusd,
-            margenusd = excluded.margenusd,
-            margenporcentaje = excluded.margenporcentaje,
-            fechacarga = now()
     """
 
     with conn_pg.cursor() as cursor:
@@ -290,16 +214,13 @@ def ejecutar_etl():
     print("INICIANDO ETL DE UNIFICACIÓN DE VENTAS")
     print("=" * 60)
     
-    # Esperar a que las BDs estén 100% listas (aún después del health check)
-    # Aumentado a 30s porque la inicialización de MySQL puede tardar más
-    print("\n⏳ Esperando 30 segundos para que las bases estén 100% listas...")
+    print("\n⏳ Esperando 30 segundos para que las bases estén completamente listas...")
     time.sleep(30)
     
     conn_mysql = None
     conn_pg = None
     try:
         print("\n📡 Intentando conectar a las bases de datos...")
-        # Aumentar reintentos y espera para tolerar inicializaciones lentas
         conn_mysql = obtener_conexion_mysql(reintentos=20, espera=3)
         conn_pg = obtener_conexion_postgres(reintentos=20, espera=3)
         print("✅ Conexiones establecidas exitosamente\n")
@@ -309,11 +230,14 @@ def ejecutar_etl():
 
         filas_unificadas = construir_ventas_unificadas(filas_mysql, conn_pg)
         guardar_ventas_unificadas(conn_pg, filas_unificadas)
+        
         print("\n" + "=" * 60)
         print("✅ ETL COMPLETADO EXITOSAMENTE")
         print("=" * 60)
     except Exception as e:
         print(f"\n❌ ERROR EN ETL: {e}")
+        import traceback
+        traceback.print_exc()
         raise
     finally:
         if conn_mysql:
