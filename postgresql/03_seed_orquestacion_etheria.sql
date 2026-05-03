@@ -1,7 +1,17 @@
-set search_path = public;
+SET search_path TO etheria;
 
-call etheria.sp_cargarpaisesbase();
-call etheria.sp_cargarcatalogosbase();
-call etheria.sp_cargarproductosbase(100);
-call etheria.sp_cargarimportacionesdemo(20);
-call etheria.sp_cargartipocambiodemo();
+-- 1. Catalogos base: moneda, pais
+CALL etheria.sp_cargarpaisesbase();
+
+-- 2. Catalogos operativos: categoria, tipousoproducto, tipoatributoproducto,
+--    proveedor, estadoimportacion, tipomovimientoinventario, tipocostoimportacion, requisitolegal
+CALL etheria.sp_cargarcatalogosbase();
+
+-- 3. Tipo de cambio: debe ir antes de importaciones para que los detalles resuelvan la tasa vigente
+CALL etheria.sp_cargartipocambiodemo();
+
+-- 4. Productos base y sus atributos
+CALL etheria.sp_cargarproductosbase(100);
+
+-- 5. Importaciones, lotes, detalles, costos y movimientos de entrada
+CALL etheria.sp_cargarimportacionesdemo(20);
